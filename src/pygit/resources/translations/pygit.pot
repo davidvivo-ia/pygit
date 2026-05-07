@@ -1,0 +1,48 @@
+# pygit translation template.
+# Copyright (C) 2026 pygit contributors
+# This file is distributed under the same MIT license as pygit.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: pygit 0.1.0a0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-01-01 00:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Open a repository to start"
+msgstr ""
+
+msgid "&File"
+msgstr ""
+
+msgid "&Open Repository..."
+msgstr ""
+
+msgid "Open an existing Git repository"
+msgstr ""
+
+msgid "&Quit"
+msgstr ""
+
+msgid "&Edit"
+msgstr ""
+
+msgid "&View"
+msgstr ""
+
+msgid "&Repository"
+msgstr ""
+
+msgid "&Help"
+msgstr ""
+
+msgid "&About pygit"
+msgstr ""
+
+msgid "Ready"
+msgstr ""

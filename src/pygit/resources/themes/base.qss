@@ -1,0 +1,5 @@
+/* QSS placeholder usado cuando el tema no es "dark".
+   En Fase 6 se sustituye por light + high-contrast + custom JSON. */
+QStatusBar {
+    border-top: 1px solid palette(mid);
+}

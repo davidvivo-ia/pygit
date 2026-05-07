@@ -1,0 +1,40 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: pygit 0.1.0a0\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Open a repository to start"
+msgstr "Abre un repositorio para empezar"
+
+msgid "&File"
+msgstr "&Archivo"
+
+msgid "&Open Repository..."
+msgstr "&Abrir repositorio..."
+
+msgid "Open an existing Git repository"
+msgstr "Abrir un repositorio Git existente"
+
+msgid "&Quit"
+msgstr "&Salir"
+
+msgid "&Edit"
+msgstr "&Editar"
+
+msgid "&View"
+msgstr "&Ver"
+
+msgid "&Repository"
+msgstr "&Repositorio"
+
+msgid "&Help"
+msgstr "Ay&uda"
+
+msgid "&About pygit"
+msgstr "&Acerca de pygit"
+
+msgid "Ready"
+msgstr "Listo"

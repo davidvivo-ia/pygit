@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Build artefacts
+build/
+dist/
+*.spec
+pip-wheel-metadata/
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Compiled translations (regenerated at runtime/build)
+*.mo
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Local config / secrets
+.env
+.env.*
+*.local.toml
+
+# Lockfiles compiled by pip-tools (commit when stabilised)
+# requirements.txt
+# requirements-dev.txt

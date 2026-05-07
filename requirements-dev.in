@@ -1,0 +1,10 @@
+-r requirements.in
+ruff>=0.5
+mypy>=1.10
+pytest>=8
+pytest-qt>=4.4
+pytest-asyncio>=0.23
+pre-commit>=3.7
+pip-tools>=7.4
+types-Pygments
+types-paramiko

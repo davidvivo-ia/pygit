@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Signal
 
 from pygit.domain.credentials import build_default_resolver
+from pygit.domain.git import advanced, undo, writer
 from pygit.domain.git import remote as remote_ops
-from pygit.domain.git import undo, writer
 from pygit.domain.git.diff import DiffEngine
 from pygit.domain.git.graph import assign_lanes
 
@@ -350,6 +350,49 @@ class RepositoryVM(QObject):
             return
         self.info.emit(f"pushed to {remote}")
         await self.refresh()
+
+    # --- Advanced -------------------------------------------------------------
+
+    async def cherry_pick(self, shas: list[str]) -> None:
+        if self._path is None or not shas:
+            return
+        await self._capture_snapshot(f"cherry-pick {len(shas)}")
+        try:
+            results = await self._workers.submit(advanced.cherry_pick, self._path, shas)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        for result in results:
+            if result.conflicts:
+                self.error.emit(f"cherry-pick produced conflicts on {result.sha_in[:7]}")
+                break
+        await self.refresh()
+
+    async def reflog(self, *, limit: int = 200) -> list[advanced.ReflogEntry]:
+        if self._path is None:
+            return []
+        try:
+            return await self._workers.submit(advanced.reflog, self._path, limit=limit)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return []
+
+    async def list_hooks(self) -> list[advanced.HookEntry]:
+        if self._path is None:
+            return []
+        try:
+            return await self._workers.submit(advanced.list_hooks, self._path)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return []
+
+    async def set_hook_enabled(self, name: str, enabled: bool) -> None:
+        if self._path is None:
+            return
+        try:
+            await self._workers.submit(advanced.set_hook_enabled, self._path, name, enabled)
+        except Exception as exc:
+            self.error.emit(str(exc))
 
     async def revert_commit(self, sha: str) -> None:
         if self._path is None:

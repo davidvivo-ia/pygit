@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from pygit import __version__
 from pygit.domain.credentials import KeyringStore
+from pygit.domain.git.advanced import RebaseAction, RebaseStep
 from pygit.domain.git.models import HeadInfo
 from pygit.infra.auto_fetch import AutoFetcher
 from pygit.ui.i18n import gettext as _
@@ -38,6 +39,7 @@ from pygit.ui.widgets.dialogs import (
     StashDialog,
     TextInputDialog,
 )
+from pygit.ui.widgets.rebase_editor import RebaseEditorDialog
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine
@@ -121,6 +123,9 @@ class MainWindow(QMainWindow):
         repo_menu.addAction(QAction(_("Create &Tag..."), self, triggered=self._on_create_tag))
         repo_menu.addAction(QAction(_("&Stash..."), self, triggered=self._on_stash))
         repo_menu.addAction(QAction(_("Stash Pop"), self, triggered=self._on_stash_pop))
+        repo_menu.addSeparator()
+        repo_menu.addAction(QAction(_("Interactive &Rebase..."), self, triggered=self._on_rebase))
+        repo_menu.addAction(QAction(_("Show Reflog..."), self, triggered=self._on_reflog))
         repo_menu.addSeparator()
         repo_menu.addAction(QAction(_("&Fetch"), self, triggered=self._on_fetch))
         repo_menu.addAction(QAction(_("&Pull"), self, triggered=self._on_pull))
@@ -333,6 +338,80 @@ class MainWindow(QMainWindow):
     def _on_stash_pop(self) -> None:
         if self._vm is not None:
             self._spawn(self._vm.stash_pop(0))
+
+    # --- Slots: advanced ------------------------------------------------------
+
+    def _on_rebase(self) -> None:
+        if self._vm is None:
+            return
+
+        async def run() -> None:
+            history = await self._services.workers.submit(
+                self._services.git_engine.walk_history,
+                self._vm.path,
+                limit=50,
+            )
+            steps = [
+                RebaseStep(
+                    action=RebaseAction.PICK,
+                    sha=c.sha,
+                    summary=c.summary,
+                )
+                for c in history[1:]  # skip HEAD itself
+            ]
+            dlg = RebaseEditorDialog(self, steps)
+
+            def on_accept(new_steps: list[RebaseStep]) -> None:
+                # We pass HEAD~N as upstream where N = len(steps).
+                upstream = f"HEAD~{len(new_steps)}"
+                from pygit.domain.git.advanced import run_interactive_rebase
+
+                async def _run() -> None:
+                    try:
+                        from importlib import resources
+
+                        script_path = resources.files("pygit.resources.scripts") / (
+                            "rebase_sequence_editor.py"
+                        )
+                        await run_interactive_rebase(
+                            self._services.git_cli,
+                            self._vm.path,  # type: ignore[arg-type]
+                            upstream,
+                            new_steps,
+                            sequence_editor_script=Path(str(script_path)),
+                        )
+                    except Exception as exc:
+                        self._on_repo_error(str(exc))
+                        return
+                    await self._vm.refresh()
+
+                self._spawn(_run())
+
+            dlg.accepted_steps.connect(on_accept)
+            dlg.exec()
+
+        self._spawn(run())
+
+    def _on_reflog(self) -> None:
+        if self._vm is None:
+            return
+
+        async def run() -> None:
+            entries = await self._vm.reflog(limit=200)
+            from PySide6.QtWidgets import QDialog, QPlainTextEdit, QVBoxLayout
+
+            dlg = QDialog(self)
+            dlg.setWindowTitle(_("Reflog"))
+            dlg.resize(720, 480)
+            layout = QVBoxLayout(dlg)
+            text = QPlainTextEdit(dlg)
+            text.setReadOnly(True)
+            lines = [f"{e.when:%Y-%m-%d %H:%M}  {e.new_sha[:7]}  {e.message}" for e in entries]
+            text.setPlainText("\n".join(lines))
+            layout.addWidget(text)
+            dlg.exec()
+
+        self._spawn(run())
 
     # --- Slots: feedback / palette --------------------------------------------
 

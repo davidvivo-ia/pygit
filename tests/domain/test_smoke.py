@@ -23,6 +23,7 @@ def test_imports() -> None:
     import pygit.domain.credentials
     import pygit.domain.diff
     import pygit.domain.git
+    import pygit.domain.git.advanced
     import pygit.domain.git.blame
     import pygit.domain.git.cli
     import pygit.domain.git.diff
@@ -55,6 +56,7 @@ def test_imports() -> None:
     import pygit.ui.widgets.dialogs
     import pygit.ui.widgets.diff_view
     import pygit.ui.widgets.graph_delegate
+    import pygit.ui.widgets.rebase_editor
     import pygit.ui.widgets.refs_tree
     import pygit.ui.widgets.wip_panel  # noqa: F401
 

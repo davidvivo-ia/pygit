@@ -496,6 +496,47 @@ class RepositoryVM(QObject):
         await self.list_pull_requests()
         await self.fetch(prune=True)
 
+    # --- AI helpers -----------------------------------------------------------
+
+    async def ai_commit_message(self, ai_config: object) -> str | None:
+        """Genera un mensaje de commit a partir del diff staged.
+
+        ``ai_config`` debe ser :class:`pygit.domain.ai.AiConfig`. Si el
+        usuario no opta por AI, el caller no debería llamar a este método.
+        """
+        from pygit.domain.ai import AiConfig, build_backend
+        from pygit.domain.ai.tasks import generate_commit_message
+
+        if not isinstance(ai_config, AiConfig):
+            return None
+        if self._path is None:
+            return None
+        try:
+            diff = await self._workers.submit(self._diff.diff_index_to_head, self._path)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return None
+        # Render text diff for the prompt.
+        chunks: list[str] = []
+        for f in diff.files:
+            chunks.append(
+                f"diff --git a/{f.old_path or ''} b/{f.new_path or ''}\n[{f.status.value}]"
+            )
+            for h in f.hunks:
+                chunks.append(h.header)
+                for line in h.lines:
+                    chunks.append(f"{line.origin.value}{line.content}")
+        text = "\n".join(chunks)
+        backend = build_backend(ai_config)
+        try:
+            message = await generate_commit_message(
+                backend, text, scrub=ai_config.provider != "ollama"
+            )
+        except Exception as exc:
+            self.error.emit(f"AI failed: {exc}")
+            return None
+        return message
+
     async def revert_commit(self, sha: str) -> None:
         if self._path is None:
             return

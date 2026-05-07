@@ -9,7 +9,7 @@ Tabla de decisión motor → operación (vivirá ampliada en docs/architecture.m
 
 from __future__ import annotations
 
-from pygit.domain.git import advanced, remote, undo, writer
+from pygit.domain.git import advanced, flow, lfs, remote, undo, worktrees, writer
 from pygit.domain.git.blame import BlameEngine, BlameLine
 from pygit.domain.git.cli import GitCli
 from pygit.domain.git.diff import (
@@ -69,9 +69,12 @@ __all__ = [
     "advanced",
     "assign_lanes",
     "file_history",
+    "flow",
+    "lfs",
     "max_lane_width",
     "remote",
     "search_pickaxe",
     "undo",
+    "worktrees",
     "writer",
 ]

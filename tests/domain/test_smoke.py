@@ -20,6 +20,7 @@ def test_imports() -> None:
     import pygit.app.container
     import pygit.app.main
     import pygit.domain.ai
+    import pygit.domain.ai.tasks
     import pygit.domain.credentials
     import pygit.domain.diff
     import pygit.domain.git
@@ -29,11 +30,14 @@ def test_imports() -> None:
     import pygit.domain.git.diff
     import pygit.domain.git.engine
     import pygit.domain.git.errors
+    import pygit.domain.git.flow
     import pygit.domain.git.graph
+    import pygit.domain.git.lfs
     import pygit.domain.git.models
     import pygit.domain.git.remote
     import pygit.domain.git.undo
     import pygit.domain.git.version
+    import pygit.domain.git.worktrees
     import pygit.domain.git.writer
     import pygit.domain.hosting
     import pygit.infra.auto_fetch
@@ -42,8 +46,10 @@ def test_imports() -> None:
     import pygit.infra.logging
     import pygit.infra.net
     import pygit.infra.workers
+    import pygit.plugin
     import pygit.ui.i18n
     import pygit.ui.themes
+    import pygit.ui.themes.loader
     import pygit.ui.viewmodels
     import pygit.ui.viewmodels.repository
     import pygit.ui.views.main_window

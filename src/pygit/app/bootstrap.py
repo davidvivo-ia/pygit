@@ -5,8 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from pygit.app.container import Services
+from pygit.domain.git import GitCli, GitEngine
 from pygit.infra.config import load_config
 from pygit.infra.logging import configure_logging
+from pygit.infra.workers import WorkerPool
 from pygit.ui.i18n import install_translations
 from pygit.ui.themes import apply_theme
 
@@ -23,9 +25,20 @@ def bootstrap(app: QApplication) -> Services:
     2. Config (TOML, ``platformdirs``) — fuente de verdad para idioma/tema.
     3. i18n (gettext) — antes de instanciar widgets que usen ``_()``.
     4. Tema (qdarkstyle / QSS propio) — antes de la primera ventana visible.
+    5. Servicios de dominio (engine/cli/workers) — perezosos, sin I/O aquí.
     """
     configure_logging()
     config = load_config()
     install_translations(language=config.ui.language)
     apply_theme(app, theme=config.ui.theme)
-    return Services(config=config)
+
+    workers = WorkerPool()
+    git_engine = GitEngine()
+    git_cli = GitCli()
+
+    return Services(
+        config=config,
+        workers=workers,
+        git_engine=git_engine,
+        git_cli=git_cli,
+    )

@@ -38,6 +38,9 @@ msgstr ""
 msgid "&Repository"
 msgstr ""
 
+msgid "&Refresh"
+msgstr ""
+
 msgid "&Help"
 msgstr ""
 
@@ -45,4 +48,49 @@ msgid "&About pygit"
 msgstr ""
 
 msgid "Ready"
+msgstr ""
+
+msgid "References"
+msgstr ""
+
+msgid "Local branches ({n})"
+msgstr ""
+
+msgid "Remote branches ({n})"
+msgstr ""
+
+msgid "Tags ({n})"
+msgstr ""
+
+msgid "Remotes ({n})"
+msgstr ""
+
+msgid "Summary"
+msgstr ""
+
+msgid "Author"
+msgstr ""
+
+msgid "Date"
+msgstr ""
+
+msgid "SHA"
+msgstr ""
+
+msgid "Open Repository"
+msgstr ""
+
+msgid "Opening {path}…"
+msgstr ""
+
+msgid "Error: {msg}"
+msgstr ""
+
+msgid "HEAD is unborn"
+msgstr ""
+
+msgid "Detached HEAD at {sha}"
+msgstr ""
+
+msgid "On branch {branch}"
 msgstr ""

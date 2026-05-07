@@ -30,6 +30,9 @@ msgstr "&Ver"
 msgid "&Repository"
 msgstr "&Repositorio"
 
+msgid "&Refresh"
+msgstr "&Actualizar"
+
 msgid "&Help"
 msgstr "Ay&uda"
 
@@ -38,3 +41,48 @@ msgstr "&Acerca de pygit"
 
 msgid "Ready"
 msgstr "Listo"
+
+msgid "References"
+msgstr "Referencias"
+
+msgid "Local branches ({n})"
+msgstr "Ramas locales ({n})"
+
+msgid "Remote branches ({n})"
+msgstr "Ramas remotas ({n})"
+
+msgid "Tags ({n})"
+msgstr "Etiquetas ({n})"
+
+msgid "Remotes ({n})"
+msgstr "Remotos ({n})"
+
+msgid "Summary"
+msgstr "Resumen"
+
+msgid "Author"
+msgstr "Autor"
+
+msgid "Date"
+msgstr "Fecha"
+
+msgid "SHA"
+msgstr "SHA"
+
+msgid "Open Repository"
+msgstr "Abrir repositorio"
+
+msgid "Opening {path}…"
+msgstr "Abriendo {path}…"
+
+msgid "Error: {msg}"
+msgstr "Error: {msg}"
+
+msgid "HEAD is unborn"
+msgstr "HEAD aún no tiene commits"
+
+msgid "Detached HEAD at {sha}"
+msgstr "HEAD desconectado en {sha}"
+
+msgid "On branch {branch}"
+msgstr "En la rama {branch}"

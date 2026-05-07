@@ -1,6 +1,6 @@
-"""Motor Git (pygit2 + git CLI híbrido). Implementación en Fase 1.
+"""Motor Git: ``GitEngine`` (pygit2) + ``GitCli`` (subprocess) híbrido.
 
-Tabla de decisión motor → operación (vivirá en docs/architecture.md):
+Tabla de decisión motor → operación (vivirá ampliada en docs/architecture.md):
 
 - pygit2 (libgit2): walks, refs, blobs, status, index, blame, low-level diff.
 - git CLI: ``rebase -i``, ``git lfs``, ``git flow``, hooks de usuario, comandos
@@ -9,22 +9,37 @@ Tabla de decisión motor → operación (vivirá en docs/architecture.md):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from pygit.domain.git.cli import GitCli
+from pygit.domain.git.engine import GitEngine
+from pygit.domain.git.errors import (
+    GitCliError,
+    GitError,
+    NotAGitRepositoryError,
+    RepositoryNotFoundError,
+)
+from pygit.domain.git.models import (
+    BranchRef,
+    CommitSummary,
+    HeadInfo,
+    RemoteRef,
+    Signature,
+    TagRef,
+)
+from pygit.domain.git.version import MIN_SUPPORTED, GitVersion
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-
-class GitEngine(Protocol):
-    """API síncrona de alto nivel sobre pygit2. Llamadas se ejecutan en worker."""
-
-    def open(self, path: Path) -> None: ...
-
-
-class GitCli(Protocol):
-    """Wrapper async sobre el binario ``git``."""
-
-    async def run(self, *args: str, cwd: Path) -> tuple[int, str, str]: ...
-
-
-__all__ = ["GitCli", "GitEngine"]
+__all__ = [
+    "MIN_SUPPORTED",
+    "BranchRef",
+    "CommitSummary",
+    "GitCli",
+    "GitCliError",
+    "GitEngine",
+    "GitError",
+    "GitVersion",
+    "HeadInfo",
+    "NotAGitRepositoryError",
+    "RemoteRef",
+    "RepositoryNotFoundError",
+    "Signature",
+    "TagRef",
+]

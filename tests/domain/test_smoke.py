@@ -23,17 +23,27 @@ def test_imports() -> None:
     import pygit.domain.credentials
     import pygit.domain.diff
     import pygit.domain.git
+    import pygit.domain.git.cli
+    import pygit.domain.git.engine
+    import pygit.domain.git.errors
+    import pygit.domain.git.models
+    import pygit.domain.git.version
     import pygit.domain.hosting
     import pygit.infra.config
     import pygit.infra.fs
     import pygit.infra.logging
     import pygit.infra.net
+    import pygit.infra.workers
     import pygit.ui.i18n
     import pygit.ui.themes
     import pygit.ui.viewmodels
+    import pygit.ui.viewmodels.repository
     import pygit.ui.views.main_window
+    import pygit.ui.views.repository_view
     import pygit.ui.views.splash
-    import pygit.ui.widgets  # noqa: F401
+    import pygit.ui.widgets
+    import pygit.ui.widgets.commits_table
+    import pygit.ui.widgets.refs_tree  # noqa: F401
 
 
 def test_default_config_when_file_missing(tmp_path: Path) -> None:

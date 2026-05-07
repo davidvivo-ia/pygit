@@ -30,10 +30,12 @@ def test_imports() -> None:
     import pygit.domain.git.errors
     import pygit.domain.git.graph
     import pygit.domain.git.models
+    import pygit.domain.git.remote
     import pygit.domain.git.undo
     import pygit.domain.git.version
     import pygit.domain.git.writer
     import pygit.domain.hosting
+    import pygit.infra.auto_fetch
     import pygit.infra.config
     import pygit.infra.fs
     import pygit.infra.logging

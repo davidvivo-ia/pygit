@@ -22,14 +22,19 @@ from PySide6.QtWidgets import (
 )
 
 from pygit import __version__
+from pygit.domain.credentials import KeyringStore
 from pygit.domain.git.models import HeadInfo
+from pygit.infra.auto_fetch import AutoFetcher
 from pygit.ui.i18n import gettext as _
 from pygit.ui.viewmodels.repository import RepositoryVM
 from pygit.ui.views.repository_view import RepositoryView
 from pygit.ui.widgets.command_palette import Command, CommandPalette
 from pygit.ui.widgets.dialogs import (
+    CloneDialog,
     CreateBranchDialog,
     CreateTagDialog,
+    CredentialsDialog,
+    PushDialog,
     StashDialog,
     TextInputDialog,
 )
@@ -49,6 +54,7 @@ class MainWindow(QMainWindow):
         self._vm: RepositoryVM | None = None
         self._repo_view: RepositoryView | None = None
         self._tasks: set[asyncio.Task[None]] = set()
+        self._auto_fetcher: AutoFetcher | None = None
 
         self.setWindowTitle(f"pygit {__version__}")
         self.resize(1440, 880)
@@ -75,6 +81,12 @@ class MainWindow(QMainWindow):
         action_open.setShortcut(QKeySequence("Ctrl+Shift+O"))
         action_open.triggered.connect(self._on_open_repository)
         file_menu.addAction(action_open)
+        action_clone = QAction(_("&Clone Repository..."), self)
+        action_clone.triggered.connect(self._on_clone)
+        file_menu.addAction(action_clone)
+        action_creds = QAction(_("Store HTTPS &credentials..."), self)
+        action_creds.triggered.connect(self._on_credentials)
+        file_menu.addAction(action_creds)
         file_menu.addSeparator()
         action_quit = QAction(_("&Quit"), self)
         action_quit.setShortcut(QKeySequence(QKeySequence.StandardKey.Quit))
@@ -109,6 +121,10 @@ class MainWindow(QMainWindow):
         repo_menu.addAction(QAction(_("Create &Tag..."), self, triggered=self._on_create_tag))
         repo_menu.addAction(QAction(_("&Stash..."), self, triggered=self._on_stash))
         repo_menu.addAction(QAction(_("Stash Pop"), self, triggered=self._on_stash_pop))
+        repo_menu.addSeparator()
+        repo_menu.addAction(QAction(_("&Fetch"), self, triggered=self._on_fetch))
+        repo_menu.addAction(QAction(_("&Pull"), self, triggered=self._on_pull))
+        repo_menu.addAction(QAction(_("Pus&h..."), self, triggered=self._on_push))
         repo_menu.addSeparator()
 
         action_palette = QAction(_("&Command Palette..."), self)
@@ -153,6 +169,9 @@ class MainWindow(QMainWindow):
             self._stack.removeWidget(self._repo_view)
             self._repo_view.deleteLater()
             self._vm.deleteLater()
+        if self._auto_fetcher is not None:
+            self._auto_fetcher.stop()
+            self._auto_fetcher = None
 
         vm = RepositoryVM(
             engine=self._services.git_engine,
@@ -175,6 +194,70 @@ class MainWindow(QMainWindow):
             bar.showMessage(_("Opening {path}…").format(path=str(path)))
 
         self._spawn(vm.open(path))
+
+        # Auto-fetch silencioso cada 5 min.
+        async def _bg_fetch() -> None:
+            if self._vm is not None:
+                await self._vm.fetch(prune=True)
+
+        self._auto_fetcher = AutoFetcher(_bg_fetch)
+        self._auto_fetcher.start()
+
+    # --- Slots: remote --------------------------------------------------------
+
+    def _on_clone(self) -> None:
+        dlg = CloneDialog(self)
+        if not dlg.exec():
+            return
+        url, target = dlg.values()
+        if not url or not target:
+            return
+        target_path = Path(target)
+
+        # Clone se ejecuta en un worker pool del services.
+        async def run() -> None:
+            try:
+                await self._services.workers.submit(_clone_helper, url, target_path)
+            except Exception as exc:
+                self._on_repo_error(str(exc))
+                return
+            self._on_info(f"cloned {url}")
+            self._open_repository(target_path)
+
+        self._spawn(run())
+
+    def _on_credentials(self) -> None:
+        dlg = CredentialsDialog(self)
+        if not dlg.exec():
+            return
+        host, username, token = dlg.values()
+        if not host or not username or not token:
+            return
+        try:
+            KeyringStore().store(host, username, token)
+        except Exception as exc:
+            self._on_repo_error(f"keyring failed: {exc}")
+            return
+        self._on_info(f"stored credentials for {host}")
+
+    def _on_fetch(self) -> None:
+        if self._vm is not None:
+            self._spawn(self._vm.fetch(prune=True))
+
+    def _on_pull(self) -> None:
+        if self._vm is not None:
+            self._spawn(self._vm.pull())
+
+    def _on_push(self) -> None:
+        if self._vm is None:
+            return
+        dlg = PushDialog(self)
+        if not dlg.exec():
+            return
+        remote, force = dlg.values()
+        if not remote:
+            return
+        self._spawn(self._vm.push(remote, force=force))
 
     # --- Slots: repository actions --------------------------------------------
 
@@ -263,6 +346,13 @@ class MainWindow(QMainWindow):
             Command(
                 "file.open_repository", _("Open Repository..."), "file", self._on_open_repository
             ),
+            Command("file.clone", _("Clone Repository..."), "file", self._on_clone),
+            Command(
+                "file.credentials",
+                _("Store HTTPS credentials..."),
+                "file",
+                self._on_credentials,
+            ),
             Command("file.quit", _("Quit"), "file", self.close),
         ]
         if self._vm is not None:
@@ -271,6 +361,9 @@ class MainWindow(QMainWindow):
                     Command("repo.refresh", _("Refresh"), "repo", self._on_refresh),
                     Command("repo.undo", _("Undo"), "repo", self._on_undo),
                     Command("repo.redo", _("Redo"), "repo", self._on_redo),
+                    Command("repo.fetch", _("Fetch"), "remote", self._on_fetch),
+                    Command("repo.pull", _("Pull"), "remote", self._on_pull),
+                    Command("repo.push", _("Push..."), "remote", self._on_push),
                     Command(
                         "branch.create", _("Create Branch..."), "branch", self._on_create_branch
                     ),
@@ -323,6 +416,13 @@ class MainWindow(QMainWindow):
         task = asyncio.ensure_future(coro)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+
+def _clone_helper(url: str, target: Path) -> None:
+    from pygit.domain.credentials import build_default_resolver
+    from pygit.domain.git.remote import clone
+
+    clone(url, target, credentials=build_default_resolver())
 
 
 __all__ = ["MainWindow"]

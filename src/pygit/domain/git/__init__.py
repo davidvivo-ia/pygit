@@ -9,7 +9,7 @@ Tabla de decisión motor → operación (vivirá ampliada en docs/architecture.m
 
 from __future__ import annotations
 
-from pygit.domain.git import undo, writer
+from pygit.domain.git import remote, undo, writer
 from pygit.domain.git.blame import BlameEngine, BlameLine
 from pygit.domain.git.cli import GitCli
 from pygit.domain.git.diff import (
@@ -69,6 +69,7 @@ __all__ = [
     "assign_lanes",
     "file_history",
     "max_lane_width",
+    "remote",
     "search_pickaxe",
     "undo",
     "writer",

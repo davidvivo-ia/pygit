@@ -80,6 +80,54 @@ class StashDialog(_BaseFormDialog):
         return self.message_input.text().strip(), self.untracked_check.isChecked()
 
 
+class CloneDialog(_BaseFormDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent, _("Clone repository"))
+        self.url_input = QLineEdit()
+        self.url_input.setPlaceholderText("https://github.com/user/repo.git")
+        self.target_input = QLineEdit()
+        self.target_input.setPlaceholderText(_("Local destination (folder)"))
+        self._layout.addRow(_("URL"), self.url_input)
+        self._layout.addRow(_("Target"), self.target_input)
+        self._layout.addRow(self._buttons)
+
+    def values(self) -> tuple[str, str]:
+        return self.url_input.text().strip(), self.target_input.text().strip()
+
+
+class CredentialsDialog(_BaseFormDialog):
+    def __init__(self, parent: QWidget | None = None, *, host: str = "") -> None:
+        super().__init__(parent, _("Store HTTPS credentials"))
+        self.host_input = QLineEdit(host)
+        self.username_input = QLineEdit()
+        self.token_input = QLineEdit()
+        self.token_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._layout.addRow(_("Host"), self.host_input)
+        self._layout.addRow(_("Username"), self.username_input)
+        self._layout.addRow(_("Token / password"), self.token_input)
+        self._layout.addRow(self._buttons)
+
+    def values(self) -> tuple[str, str, str]:
+        return (
+            self.host_input.text().strip().lower(),
+            self.username_input.text().strip(),
+            self.token_input.text(),
+        )
+
+
+class PushDialog(_BaseFormDialog):
+    def __init__(self, parent: QWidget | None = None, *, default_remote: str = "origin") -> None:
+        super().__init__(parent, _("Push"))
+        self.remote_input = QLineEdit(default_remote)
+        self.force_check = QCheckBox(_("Force-with-lease"))
+        self._layout.addRow(_("Remote"), self.remote_input)
+        self._layout.addRow("", self.force_check)
+        self._layout.addRow(self._buttons)
+
+    def values(self) -> tuple[str, bool]:
+        return self.remote_input.text().strip(), self.force_check.isChecked()
+
+
 class TextInputDialog(_BaseFormDialog):
     def __init__(
         self,
@@ -101,8 +149,11 @@ class TextInputDialog(_BaseFormDialog):
 
 
 __all__ = [
+    "CloneDialog",
     "CreateBranchDialog",
     "CreateTagDialog",
+    "CredentialsDialog",
+    "PushDialog",
     "StashDialog",
     "TextInputDialog",
 ]

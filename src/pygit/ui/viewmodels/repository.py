@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
+from pygit.domain.credentials import build_default_resolver
+from pygit.domain.git import remote as remote_ops
 from pygit.domain.git import undo, writer
 from pygit.domain.git.diff import DiffEngine
 from pygit.domain.git.graph import assign_lanes
@@ -54,6 +56,7 @@ class RepositoryVM(QObject):
         self._engine = engine
         self._workers = workers
         self._diff = DiffEngine()
+        self._credentials = build_default_resolver()
         self._path: Path | None = None
         self._head: HeadInfo | None = None
         self._undo: list[Snapshot] = []
@@ -293,6 +296,59 @@ class RepositoryVM(QObject):
         except Exception as exc:
             self.error.emit(str(exc))
             return
+        await self.refresh()
+
+    # --- Remote ops -----------------------------------------------------------
+
+    async def fetch(self, remote: str = "origin", *, prune: bool = False) -> None:
+        if self._path is None:
+            return
+        try:
+            await self._workers.submit(
+                remote_ops.fetch, self._path, remote, prune=prune, credentials=self._credentials
+            )
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        self.info.emit(f"fetched from {remote}")
+        await self.refresh()
+
+    async def pull(
+        self, remote: str = "origin", *, rebase: bool = False, ff_only: bool = False
+    ) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"pull {remote}")
+        try:
+            await self._workers.submit(
+                remote_ops.pull,
+                self._path,
+                remote,
+                rebase=rebase,
+                ff_only=ff_only,
+                credentials=self._credentials,
+            )
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        self.info.emit(f"pulled from {remote}")
+        await self.refresh()
+
+    async def push(self, remote: str = "origin", *, force: bool = False) -> None:
+        if self._path is None:
+            return
+        try:
+            await self._workers.submit(
+                remote_ops.push,
+                self._path,
+                remote,
+                force=force,
+                credentials=self._credentials,
+            )
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        self.info.emit(f"pushed to {remote}")
         await self.refresh()
 
     async def revert_commit(self, sha: str) -> None:

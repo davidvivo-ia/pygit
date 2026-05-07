@@ -26,9 +26,12 @@ from pygit.domain.credentials import KeyringStore
 from pygit.domain.git.advanced import RebaseAction, RebaseStep
 from pygit.domain.git.models import HeadInfo
 from pygit.infra.auto_fetch import AutoFetcher
+from pygit.infra.config import AiConfigStored, AppConfig, UIConfig, write_config
 from pygit.ui.i18n import gettext as _
 from pygit.ui.viewmodels.repository import RepositoryVM
+from pygit.ui.views.onboarding import OnboardingWizard, apply_git_identity
 from pygit.ui.views.repository_view import RepositoryView
+from pygit.ui.views.settings_dialog import SettingsDialog
 from pygit.ui.widgets.command_palette import Command, CommandPalette
 from pygit.ui.widgets.dialogs import (
     CloneDialog,
@@ -97,6 +100,11 @@ class MainWindow(QMainWindow):
         file_menu.addAction(action_quit)
 
         edit_menu = menubar.addMenu(_("&Edit"))
+        action_settings = QAction(_("&Preferences..."), self)
+        action_settings.setShortcut(QKeySequence("Ctrl+,"))
+        action_settings.triggered.connect(self._on_settings)
+        edit_menu.addAction(action_settings)
+        edit_menu.addSeparator()
         action_undo = QAction(_("&Undo"), self)
         action_undo.setShortcut(QKeySequence("Ctrl+Z"))
         action_undo.triggered.connect(self._on_undo)
@@ -464,6 +472,81 @@ class MainWindow(QMainWindow):
         self._spawn(self._vm.create_pull_request(title, body, source, target, draft=draft))
 
     # --- Slots: feedback / palette --------------------------------------------
+
+    def _on_settings(self) -> None:
+        dlg = SettingsDialog(self)
+        cfg = self._services.config
+        dlg.language.setCurrentIndex(0 if cfg.ui.language == "es" else 1)
+        dlg.theme.setCurrentIndex(0 if cfg.ui.theme == "dark" else 1)
+        dlg.ai_enabled.setChecked(cfg.ai.enabled)
+        idx = max(
+            0,
+            ["openai", "anthropic", "ollama"].index(cfg.ai.provider)
+            if cfg.ai.provider in ("openai", "anthropic", "ollama")
+            else 0,
+        )
+        dlg.ai_provider.setCurrentIndex(idx)
+        dlg.ai_model.setText(cfg.ai.model)
+        if not dlg.exec():
+            return
+        values = dlg.values()
+        new_cfg = AppConfig(
+            ui=UIConfig(
+                language=str(values["language"] or "es"),
+                theme=str(values["theme"] or "dark"),
+            ),
+            ai=AiConfigStored(
+                enabled=bool(values["ai_enabled"]),
+                provider=str(values["ai_provider"] or "openai"),
+                model=str(values["ai_model"] or ""),
+            ),
+        )
+        write_config(new_cfg)
+        if values["name"] and values["email"]:
+            apply_git_identity(str(values["name"]), str(values["email"]))
+        if values["ai_api_key"]:
+            import keyring  # local import: only when user actually saves a key
+
+            from pygit.domain.credentials import KEYRING_SERVICE
+
+            keyring.set_password(
+                f"{KEYRING_SERVICE}-ai", str(values["ai_provider"]), str(values["ai_api_key"])
+            )
+        self._on_info(_("Preferences saved. Restart to apply language/theme."))
+
+    def maybe_run_onboarding(self) -> None:
+        """Lanza el wizard si la config aún no existe en disco."""
+        from pygit.infra.config import config_path
+
+        if config_path().exists():
+            return
+        wiz = OnboardingWizard(self)
+        if not wiz.exec():
+            # User cancelled — write a minimal default config so we don't ask again.
+            write_config(self._services.config)
+            return
+        values = wiz.values()
+        new_cfg = AppConfig(
+            ui=UIConfig(
+                language=str(values["language"] or "es"),
+                theme=str(values["theme"] or "dark"),
+            ),
+            ai=AiConfigStored(
+                enabled=bool(values["ai_enabled"]),
+                provider=str(values["ai_provider"] or "openai"),
+                model=str(values["ai_model"] or ""),
+            ),
+        )
+        write_config(new_cfg)
+        apply_git_identity(str(values["name"] or ""), str(values["email"] or ""))
+        if values["ai_enabled"] and values["ai_api_key"]:
+            import keyring
+
+            from pygit.domain.credentials import KEYRING_SERVICE
+
+            keyring.set_password(
+                f"{KEYRING_SERVICE}-ai", str(values["ai_provider"]), str(values["ai_api_key"])
+            )
 
     def _on_command_palette(self) -> None:
         palette = CommandPalette(self)

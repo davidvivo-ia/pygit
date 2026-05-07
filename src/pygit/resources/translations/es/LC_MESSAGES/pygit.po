@@ -18,11 +18,26 @@ msgstr "&Abrir repositorio..."
 msgid "Open an existing Git repository"
 msgstr "Abrir un repositorio Git existente"
 
+msgid "&Clone Repository..."
+msgstr "&Clonar repositorio..."
+
+msgid "Store HTTPS &credentials..."
+msgstr "Guardar &credenciales HTTPS..."
+
 msgid "&Quit"
 msgstr "&Salir"
 
 msgid "&Edit"
 msgstr "&Editar"
+
+msgid "&Preferences..."
+msgstr "&Preferencias..."
+
+msgid "&Undo"
+msgstr "&Deshacer"
+
+msgid "&Redo"
+msgstr "&Rehacer"
 
 msgid "&View"
 msgstr "&Ver"
@@ -32,6 +47,48 @@ msgstr "&Repositorio"
 
 msgid "&Refresh"
 msgstr "&Actualizar"
+
+msgid "&Create Branch..."
+msgstr "&Crear rama..."
+
+msgid "Checkout Branch..."
+msgstr "Cambiar a rama..."
+
+msgid "Merge Branch..."
+msgstr "Fusionar rama..."
+
+msgid "Create &Tag..."
+msgstr "Crear &etiqueta..."
+
+msgid "&Stash..."
+msgstr "&Stash..."
+
+msgid "Stash Pop"
+msgstr "Stash Pop"
+
+msgid "Interactive &Rebase..."
+msgstr "&Rebase interactivo..."
+
+msgid "Show Reflog..."
+msgstr "Mostrar reflog..."
+
+msgid "&List Pull Requests..."
+msgstr "&Listar Pull Requests..."
+
+msgid "Create &PR..."
+msgstr "Crear &PR..."
+
+msgid "&Fetch"
+msgstr "&Fetch"
+
+msgid "&Pull"
+msgstr "&Pull"
+
+msgid "Pus&h..."
+msgstr "Pus&h..."
+
+msgid "&Command Palette..."
+msgstr "Paleta de &comandos..."
 
 msgid "&Help"
 msgstr "Ay&uda"
@@ -86,3 +143,213 @@ msgstr "HEAD desconectado en {sha}"
 
 msgid "On branch {branch}"
 msgstr "En la rama {branch}"
+
+msgid "Unstaged changes"
+msgstr "Cambios sin stage"
+
+msgid "Stage"
+msgstr "Stage"
+
+msgid "Stage all"
+msgstr "Stage todo"
+
+msgid "Discard"
+msgstr "Descartar"
+
+msgid "Staged changes"
+msgstr "Cambios en stage"
+
+msgid "Unstage"
+msgstr "Unstage"
+
+msgid "Title (max 50)"
+msgstr "Título (máx 50)"
+
+msgid "Body — wrap at 72"
+msgstr "Cuerpo — ajusta a 72"
+
+msgid "Amend"
+msgstr "Amend"
+
+msgid "Sign-off"
+msgstr "Sign-off"
+
+msgid "Commit"
+msgstr "Commit"
+
+msgid "Create branch"
+msgstr "Crear rama"
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "Target (sha or branch, blank=HEAD)"
+msgstr "Objetivo (sha o rama, vacío=HEAD)"
+
+msgid "Checkout after create"
+msgstr "Cambiar a la rama tras crear"
+
+msgid "Create tag"
+msgstr "Crear etiqueta"
+
+msgid "Target (sha)"
+msgstr "Objetivo (sha)"
+
+msgid "Optional — non-empty creates an annotated tag"
+msgstr "Opcional — si no está vacío, crea una etiqueta anotada"
+
+msgid "Message"
+msgstr "Mensaje"
+
+msgid "Stash changes"
+msgstr "Guardar en stash"
+
+msgid "Include untracked"
+msgstr "Incluir sin trackear"
+
+msgid "Clone repository"
+msgstr "Clonar repositorio"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Local destination (folder)"
+msgstr "Destino local (carpeta)"
+
+msgid "Target"
+msgstr "Destino"
+
+msgid "Create Pull Request"
+msgstr "Crear Pull Request"
+
+msgid "Description (Markdown ok)"
+msgstr "Descripción (Markdown ok)"
+
+msgid "Title"
+msgstr "Título"
+
+msgid "Source branch"
+msgstr "Rama origen"
+
+msgid "Target branch"
+msgstr "Rama destino"
+
+msgid "Body"
+msgstr "Cuerpo"
+
+msgid "Draft"
+msgstr "Borrador"
+
+msgid "Store HTTPS credentials"
+msgstr "Guardar credenciales HTTPS"
+
+msgid "Host"
+msgstr "Host"
+
+msgid "Username"
+msgstr "Usuario"
+
+msgid "Token / password"
+msgstr "Token / contraseña"
+
+msgid "Push"
+msgstr "Push"
+
+msgid "Force-with-lease"
+msgstr "Force-with-lease"
+
+msgid "Remote"
+msgstr "Remoto"
+
+msgid "Checkout"
+msgstr "Checkout"
+
+msgid "Branch name"
+msgstr "Nombre de rama"
+
+msgid "Merge"
+msgstr "Merge"
+
+msgid "Branch to merge into HEAD"
+msgstr "Rama a fusionar en HEAD"
+
+msgid "Type a command…"
+msgstr "Escribe un comando…"
+
+msgid "Pull Requests"
+msgstr "Pull Requests"
+
+msgid "Refresh"
+msgstr "Actualizar"
+
+msgid "Create..."
+msgstr "Crear..."
+
+msgid "Merge selected"
+msgstr "Mergear seleccionado"
+
+msgid "Reflog"
+msgstr "Reflog"
+
+msgid "Interactive rebase"
+msgstr "Rebase interactivo"
+
+msgid "Reorder rows with drag-and-drop. P/R/E/S/F/D set the action."
+msgstr "Reordena con drag-and-drop. P/R/E/S/F/D fijan la acción."
+
+msgid "Welcome to pygit"
+msgstr "Bienvenido a pygit"
+
+msgid "Identity"
+msgstr "Identidad"
+
+msgid "These values become your Git user.name/user.email."
+msgstr "Estos valores se aplicarán a tu user.name/user.email de Git."
+
+msgid "Email"
+msgstr "Email"
+
+msgid "Preferences"
+msgstr "Preferencias"
+
+msgid "Language"
+msgstr "Idioma"
+
+msgid "Theme"
+msgstr "Tema"
+
+msgid "Dark"
+msgstr "Oscuro"
+
+msgid "Light"
+msgstr "Claro"
+
+msgid "AI (opt-in)"
+msgstr "IA (opt-in)"
+
+msgid "Optional. If enabled, pygit can draft commit messages and PR descriptions. Keys are stored in your OS keyring."
+msgstr "Opcional. Si lo activas, pygit puede redactar mensajes de commit y descripciones de PR. Las claves se guardan en el llavero del SO."
+
+msgid "Enable AI features"
+msgstr "Activar funciones de IA"
+
+msgid "Provider"
+msgstr "Proveedor"
+
+msgid "Model — leave blank for default"
+msgstr "Modelo — vacío para el default"
+
+msgid "API key (cloud only)"
+msgstr "API key (sólo cloud)"
+
+msgid "API key"
+msgstr "API key"
+
+msgid "AI"
+msgstr "IA"
+
+msgid "General"
+msgstr "General"
+
+msgid "Preferences saved. Restart to apply language/theme."
+msgstr "Preferencias guardadas. Reinicia para aplicar idioma/tema."

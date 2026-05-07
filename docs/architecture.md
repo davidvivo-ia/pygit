@@ -1,136 +1,196 @@
 # Arquitectura de pygit
 
-> Documento vivo. Las decisiones marcadas como **provisional** se revalidan al
-> entrar a la fase indicada.
+> Documento vivo. Refleja la implementación a fecha del último commit y
+> se ajusta al cierre de cada fase.
 
 ## Patrón general
 
-MVVM con repositorio como agregado raíz. Inspirado en SourceGit (Avalonia +
-CommunityToolkit.Mvvm), adaptado a Qt/PySide6.
+MVVM con repositorio como agregado raíz. Inspirado en SourceGit
+(Avalonia + CommunityToolkit.Mvvm), adaptado a Qt/PySide6.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         Views (PySide6)                     │
-│  GraphView · DiffView · CommitPanel · BranchTree · Dialogs  │
+│  GraphView · DiffView · CommitPanel · BranchTree · WipPanel │
+│  PrPanel · CommandPalette · OnboardingWizard · Settings     │
 └──────────────────────────────┬──────────────────────────────┘
                                │ signals/slots, data binding
 ┌──────────────────────────────▼──────────────────────────────┐
 │                       ViewModels                            │
-│  RepositoryVM · GraphVM · DiffVM · StashVM · ConflictVM ... │
+│  RepositoryVM (history, diff, status, undo, refs, PRs, AI)  │
 └──────────────────────────────┬──────────────────────────────┘
                                │ async calls
 ┌──────────────────────────────▼──────────────────────────────┐
 │                     Domain / Services                       │
-│  GitEngine (pygit2) · GitCli (subprocess) · DiffEngine ·    │
-│  HostingService · CredentialService · AIService · LfsService│
+│  GitEngine · GitCli · DiffEngine · BlameEngine · graph      │
+│  writer · undo · remote · advanced · flow · lfs · worktrees │
+│  HostingService (GitHub/…) · CredentialResolver · AiBackend │
 └──────────────────────────────┬──────────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────────┐
-│       Infraestructura: FS, red, llavero, config, i18n       │
+│  Infra: WorkerPool · AutoFetcher · config (TOML) · logging  │
+│         keyring · plugin entry-points · themes loader       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Regla de oro: **`domain/` no importa Qt**. Esto asegura que el motor sea
-testable headless y reutilizable desde un futuro CLI.
+Regla de oro: **`domain/` no importa Qt**. El motor es testable headless
+y reusable desde un futuro CLI.
 
 ## Threading model
 
 | Trabajo | Hilo |
 |---|---|
-| Pintado de Qt y operaciones < 16 ms | Hilo UI |
-| Llamadas pygit2 / subprocess (bloqueantes) | `QThreadPool` (workers cancelables) |
+| Pintado Qt y operaciones < 16 ms | Hilo UI |
+| pygit2 / subprocess (bloqueantes) | `WorkerPool` (`ThreadPoolExecutor`) |
 | HTTP a hosting providers / AI | `asyncio` vía `qasync` |
-| Watcher de FS para WIP | `QFileSystemWatcher` + debounce 250 ms |
-| Auto-fetch | `QTimer` configurable (default 5 min) |
+| Watcher FS para WIP | (Fase 8: `QFileSystemWatcher` + debounce 250 ms) |
+| Auto-fetch | `QTimer` cada 5 min, errores silenciados |
 
-Toda llamada bloqueante > 50 ms va a worker. La UI nunca se congela.
-
-`qasync.QEventLoop` integra el loop asyncio con el event loop de Qt; al cerrar
-la última ventana, `QApplication.quit()` dispara `loop.stop()` y el bloque
-`with loop:` libera limpiamente.
+`qasync.QEventLoop` integra el loop asyncio con el event loop de Qt.
+Tasks largas se almacenan en `_tasks: set[Task]` para evitar que el GC
+las recoja antes de tiempo (RUF006).
 
 ## Motor Git: pygit2 vs git CLI
 
-Tabla de decisión (provisional, ampliable en Fases 1-4):
-
 | Operación | Motor | Razón |
 |---|---|---|
-| `clone`, `fetch`, `push`, `pull` | pygit2 | Control fino sobre callbacks (auth, progreso). |
-| Walker / log / refs / blobs | pygit2 | Sin spawning, ideal para el grafo. |
-| `status`, `index`, staging hunk-level | pygit2 | API estable. |
+| `clone`, `fetch`, `push` | pygit2 | Callbacks finos para auth/progreso. |
+| Walker / log / refs / blobs | pygit2 | Sin spawning, ideal para grafo. |
+| `status`, `index`, staging por archivo | pygit2 | API estable. |
+| Staging hunk-level | git CLI (`apply --cached`) | libgit2 Index sólo opera por archivo. |
 | `blame`, `diff` low-level | pygit2 | Acceso al árbol y hunks por estructura. |
-| `rebase -i` | git CLI | libgit2 no expone el todo-script editable. |
-| Hooks (pre-commit, etc.) | git CLI | libgit2 no ejecuta hooks de usuario. |
+| `rebase -i` | git CLI + sequence editor | Doc en `domain.git.advanced`. |
+| Hooks (pre-commit, etc.) | git CLI | libgit2 no ejecuta hooks. |
 | `git lfs *` | git CLI | LFS no es libgit2. |
 | `git flow *` | git CLI | Plugin externo. |
-| `worktree add/remove/prune` | git CLI | libgit2 sólo lectura básica. |
-| `bisect` | git CLI | Workflow stateful en `.git/BISECT_*`. |
+| `worktree add/remove` | pygit2 | API expuesta. |
+| `worktree prune` | git CLI | libgit2 no lo soporta. |
+| File history `--follow` | git CLI | libgit2 sin paridad estable. |
+| Pickaxe `-S`/`-G` | git CLI | Motor de diff de Git. |
 
-Tras cada operación CLI, las refs se invalidan en la capa pygit2 antes de
-volver a leerse.
+## Rebase interactivo
+
+Driver basado en `GIT_SEQUENCE_EDITOR`:
+
+1. La UI permite reordenar/cambiar acciones de los commits que va a
+   rebasar.
+2. Antes de invocar `git rebase -i <upstream>`, exportamos
+   `GIT_SEQUENCE_EDITOR` apuntando al script auxiliar
+   `pygit/resources/scripts/rebase_sequence_editor.py` y
+   `PYGIT_REBASE_TODO` con el contenido completo del nuevo todo.
+3. Git ejecuta nuestro script, que sobreescribe `git-rebase-todo` con
+   el payload entregado y termina; el rebase prosigue como si el
+   usuario hubiera editado el fichero a mano.
+
+## Hosting providers
+
+`detect_provider(remote_urls, token)` clasifica el host y devuelve la
+implementación adecuada. v1.0 cubre **GitHub** completamente
+(list/create/merge); GitLab, Bitbucket, Azure DevOps, Gitea quedan como
+`_UnimplementedProvider` con `NotImplementedError` explícito hasta que
+se priorice cada uno.
+
+## AI
+
+Backends conmutables (`OpenAi`, `Anthropic`, `Ollama`) implementados
+sobre REST con `httpx` directo — sin SDKs propietarios.
+**Privacy first**: `scrub_secrets()` ejecuta una pasada de regex
+(estilo gitleaks) sobre el payload antes de hablar con cualquier
+proveedor cloud; los locales (Ollama) lo saltan opcionalmente. Los
+diffs jamás se envían sin filtrar.
+
+## Plugins
+
+Entry-point group `pygit.plugin.api.v1` (versionado para forward-compat).
+La API expone `register_action`, `register_hosting_provider`,
+`register_ai_backend`, `register_theme`. Los plugins corren in-process
+pero sus errores se sandboxan: una excepción al cargar un plugin se
+loggea y la app sigue arrancando.
+
+## Themes
+
+Carga JSON con `{name, kind, qss, graph_palette}`. La paleta del grafo
+se inyecta en `GraphDelegate`; `qss` se aplica con
+`QApplication.setStyleSheet`. Light, Dark, High-Contrast nativos
+disponibles; los custom van en `~/.config/pygit/themes/*.json`
+(o equivalente Windows AppData).
 
 ## Paquetería y empaquetado
 
 - **Build backend**: hatchling (PEP 517).
-- **Locking**: pip-tools (`requirements*.in` → `*.txt` cuando se estabilice).
-- **Distribución**: PyInstaller `--onedir` → ZIP. Sin instalador en v1.0.
-  - Razón: simplicidad operativa y zero-trust (no requiere admin para correr).
-  - Trade-off aceptado: el usuario no obtiene shortcuts en menú Inicio ni
-    asociación con `.git`. Se pospone a v1.1 si hay demanda.
-- **Firma**: ninguna en v1.0. SmartScreen mostrará warning la primera vez.
+- **Locking**: pip-tools (`requirements*.in` → `*.txt`).
+- **Distribución**: PyInstaller `--onedir` → ZIP.
+  Spec en `packaging/pygit.spec`; build con `packaging/build.ps1`.
+  Sin instalador en v1.0; el usuario descarga el ZIP, descomprime y
+  ejecuta `pygit.exe`.
+- **Firma**: ninguna en v1.0. SmartScreen mostrará warning la primera
+  vez (decisión registrada del propietario).
 
 ## Plataforma
 
-Solo **Windows x64** en v1.0. Implicaciones:
+Sólo **Windows x64** en v1.0. Implicaciones:
 
 - Terminal embebida (futuro): `pywinpty`, sin fallback POSIX.
-- Credenciales: `keyring` → backend nativo `WinVaultKeyring`.
-- Watchers de FS: `ReadDirectoryChangesW` vía `QFileSystemWatcher`.
-- Versión mínima de Git CLI: 2.20+ (Git for Windows). Features posteriores
-  (`--force-with-lease=ref:expect`, `rebase --update-refs`, sparse-checkout v2,
-  partial clone estable) requieren guards en runtime — un módulo `GitVersion`
-  detectará el binario al arranque y deshabilitará features no disponibles.
+- Credenciales: `keyring` → backend `WinVaultKeyring`.
+- File watchers: `ReadDirectoryChangesW` vía `QFileSystemWatcher`.
+- Versión mínima de Git CLI: 2.20+. Features posteriores se gating
+  con `GitVersion`.
 
-## i18n
+## Estructura de paquetes
 
-- `gettext` estándar.
-- Fuentes `.po` versionadas; `.mo` compilados al vuelo en runtime con
-  `babel.messages.mofile` (sin dependencia de `msgfmt` externo).
-- Idiomas en v1.0: `es` (primario), `en`. Resto a partir de Fase 6.
+```
+src/pygit/
+  app/            entry point, bootstrap, contenedor de servicios
+  domain/
+    git/          engine, cli, diff, blame, graph, writer, undo,
+                  remote, advanced (rebase/cherry-pick/reflog/hooks),
+                  flow, lfs, worktrees, version, errors, models
+    hosting/      providers (GitHub completo + stubs)
+    ai/           backends (OpenAI/Anthropic/Ollama) + tasks + scrub
+    credentials/  KeyringStore + SshKeyStore + CompositeResolver
+    diff/
+  infra/
+    config/       TOML load + write con platformdirs
+    logging/      structlog
+    workers.py    ThreadPoolExecutor + asyncio.run_in_executor
+    auto_fetch.py QTimer-based silent fetcher
+    fs/  net/
+  plugin/         entry-point discovery + PluginAPI
+  ui/
+    views/        MainWindow, RepositoryView, splash, onboarding,
+                  settings_dialog
+    viewmodels/   RepositoryVM
+    widgets/      commits_table + graph_delegate, refs_tree, diff_view,
+                  blame_view, wip_panel, dialogs, command_palette,
+                  rebase_editor, pr_panel
+    themes/       qdarkstyle wrapper + JSON loader
+    i18n/         gettext + on-the-fly .mo compilation
+  resources/
+    icons/  themes/  translations/  scripts/
+packaging/        pygit.spec + build.ps1
+tests/            unit (domain) + UI (pytest-qt)
+docs/             architecture.md (este documento)
+```
 
-## Configuración
+## Riesgos abiertos / pendientes documentados
 
-- TOML, leída con `tomllib` (stdlib).
-- Path por usuario vía `platformdirs.user_config_path("pygit", roaming=True)`.
-- Por repo: en `.git/pygit/config.toml` (a partir de Fase 1).
-
-## Licencias
-
-| Componente | Licencia |
-|---|---|
-| pygit (este proyecto) | MIT |
-| PySide6 | LGPLv3 |
-| pygit2 / libgit2 | GPLv2 con linking exception (compatible con MIT) |
-| qasync | BSD |
-| qdarkstyle | MIT |
-| qtawesome | MIT |
-| Pygments | BSD |
-| httpx, paramiko, cryptography, keyring, structlog, platformdirs, Babel | permisivas |
-
-PyQt6 y QScintilla quedan **excluidas por defecto** (GPL).
-
-## Riesgos abiertos (revisión por fase)
-
-1. **Rendimiento del grafo (Fase 1)**: 50k commits, scroll 60 fps. Descartado
-   `QGraphicsScene` con un item por commit. Plan: `QAbstractItemView` custom
-   con scroll virtual y caché de paths.
-2. **Empaquetado de pygit2 con PyInstaller**: hay que verificar que la libgit2
-   binaria queda correctamente incluida en `--onedir`. Prototipar en Fase 0/7.
-3. **Resolutor de conflictos 3-vías** in-app: alcance v1.0 = navegación + accept
-   current/incoming/both + delegación a herramienta externa configurable. Editor
-   propio completo se mueve a v1.1.
-4. **Rebase interactivo visual (Fase 4)**: necesita `GIT_SEQUENCE_EDITOR`
-   apuntando a un script auxiliar que lee instrucciones desde un fichero/socket
-   gestionado por la app.
-5. **AI: filtrado de secretos** antes de enviar diffs a proveedores externos.
-   Obligatorio en Fase 6.
+1. **Rebase no-interactivo (pull --rebase)**: pygit2 no expone una API
+   no-interactiva limpia; actualmente caemos a merge_branch. Follow-up:
+   delegar al CLI con `git rebase` no-interactivo cuando el usuario lo
+   solicite.
+2. **Resolutor de conflictos in-app 3-way**: alcance v1.0 = navegación
+   + accept current/incoming/both + delegación a herramienta externa
+   configurable. Editor 3-way propio movido a v1.1.
+3. **PyInstaller + pygit2**: el spec incluye `collect_dynamic_libs`,
+   pero requiere validación en CI Windows con un build real
+   (Fase 7+ post-merge).
+4. **Themes light/high-contrast**: el loader lee JSON; falta empaquetar
+   ejemplos curados (light "rose-pine-dawn" y "high-contrast").
+5. **Watchers de FS para WIP**: pendiente conectar
+   `QFileSystemWatcher` + debounce 250 ms a `RepositoryVM.refresh()`.
+6. **Hosting non-GitHub**: GitLab/Bitbucket/Azure/Gitea siguen como
+   `_UnimplementedProvider`. Cada uno se incorpora cuando hay un
+   usuario real con la necesidad.
+7. **mypy --strict en CI**: aún no validado fin a fin (este entorno no
+   tiene PySide6/pygit2 instalados; el CI Windows queda como single
+   source of truth).

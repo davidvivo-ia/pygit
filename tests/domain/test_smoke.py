@@ -53,7 +53,9 @@ def test_imports() -> None:
     import pygit.ui.viewmodels
     import pygit.ui.viewmodels.repository
     import pygit.ui.views.main_window
+    import pygit.ui.views.onboarding
     import pygit.ui.views.repository_view
+    import pygit.ui.views.settings_dialog
     import pygit.ui.views.splash
     import pygit.ui.widgets
     import pygit.ui.widgets.blame_view

@@ -38,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     window = MainWindow(services=services)
     window.show()
     splash.finish(window)
+    window.maybe_run_onboarding()
 
     with loop:
         loop.run_forever()

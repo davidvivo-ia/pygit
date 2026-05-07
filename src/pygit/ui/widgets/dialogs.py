@@ -95,6 +95,32 @@ class CloneDialog(_BaseFormDialog):
         return self.url_input.text().strip(), self.target_input.text().strip()
 
 
+class CreatePrDialog(_BaseFormDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent, _("Create Pull Request"))
+        self.title_input = QLineEdit()
+        self.source_input = QLineEdit()
+        self.target_input = QLineEdit("main")
+        self.body_input = QPlainTextEdit()
+        self.body_input.setPlaceholderText(_("Description (Markdown ok)"))
+        self.draft_check = QCheckBox(_("Draft"))
+        self._layout.addRow(_("Title"), self.title_input)
+        self._layout.addRow(_("Source branch"), self.source_input)
+        self._layout.addRow(_("Target branch"), self.target_input)
+        self._layout.addRow(_("Body"), self.body_input)
+        self._layout.addRow("", self.draft_check)
+        self._layout.addRow(self._buttons)
+
+    def values(self) -> tuple[str, str, str, str, bool]:
+        return (
+            self.title_input.text().strip(),
+            self.body_input.toPlainText().strip(),
+            self.source_input.text().strip(),
+            self.target_input.text().strip(),
+            self.draft_check.isChecked(),
+        )
+
+
 class CredentialsDialog(_BaseFormDialog):
     def __init__(self, parent: QWidget | None = None, *, host: str = "") -> None:
         super().__init__(parent, _("Store HTTPS credentials"))
@@ -151,6 +177,7 @@ class TextInputDialog(_BaseFormDialog):
 __all__ = [
     "CloneDialog",
     "CreateBranchDialog",
+    "CreatePrDialog",
     "CreateTagDialog",
     "CredentialsDialog",
     "PushDialog",

@@ -56,6 +56,7 @@ def test_imports() -> None:
     import pygit.ui.widgets.dialogs
     import pygit.ui.widgets.diff_view
     import pygit.ui.widgets.graph_delegate
+    import pygit.ui.widgets.pr_panel
     import pygit.ui.widgets.rebase_editor
     import pygit.ui.widgets.refs_tree
     import pygit.ui.widgets.wip_panel  # noqa: F401

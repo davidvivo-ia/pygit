@@ -12,11 +12,12 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
-from pygit.domain.credentials import build_default_resolver
+from pygit.domain.credentials import KeyringStore, build_default_resolver
 from pygit.domain.git import advanced, undo, writer
 from pygit.domain.git import remote as remote_ops
 from pygit.domain.git.diff import DiffEngine
 from pygit.domain.git.graph import assign_lanes
+from pygit.domain.hosting import detect_provider
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -43,6 +44,7 @@ class RepositoryVM(QObject):
     branches_changed = Signal(list)
     tags_changed = Signal(list)
     remotes_changed = Signal(list)
+    pull_requests_changed = Signal(list)
     history_changed = Signal(list, list)
     status_changed = Signal(list)
     path_changed = Signal(object)
@@ -393,6 +395,106 @@ class RepositoryVM(QObject):
             await self._workers.submit(advanced.set_hook_enabled, self._path, name, enabled)
         except Exception as exc:
             self.error.emit(str(exc))
+
+    # --- Hosting / PRs --------------------------------------------------------
+
+    async def list_pull_requests(self) -> None:
+        if self._path is None:
+            return
+        try:
+            remotes = await self._workers.submit(self._engine.remotes, self._path)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        urls = [r.fetch_url for r in remotes]
+        # Token: hostname → keyring
+        provider = None
+        for url in urls:
+            from pygit.domain.hosting import parse_remote_url
+
+            repo = parse_remote_url(url)
+            if repo is None:
+                continue
+            cred = KeyringStore().lookup(repo.host)
+            token = cred[1] if cred else None
+            provider = detect_provider([url], token=token)
+            if provider is not None:
+                break
+        if provider is None:
+            self.info.emit("no hosting provider detected")
+            self.pull_requests_changed.emit([])
+            return
+        try:
+            prs = await provider.list_pull_requests()
+        except Exception as exc:
+            self.error.emit(f"PR list failed: {exc}")
+            return
+        self.pull_requests_changed.emit(prs)
+
+    async def create_pull_request(
+        self, title: str, body: str, source: str, target: str, *, draft: bool = False
+    ) -> None:
+        if self._path is None:
+            return
+        try:
+            remotes = await self._workers.submit(self._engine.remotes, self._path)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        provider = None
+        for r in remotes:
+            from pygit.domain.hosting import parse_remote_url
+
+            repo = parse_remote_url(r.fetch_url)
+            if repo is None:
+                continue
+            cred = KeyringStore().lookup(repo.host)
+            token = cred[1] if cred else None
+            provider = detect_provider([r.fetch_url], token=token)
+            if provider is not None:
+                break
+        if provider is None:
+            self.error.emit("no hosting provider with credentials")
+            return
+        try:
+            pr = await provider.create_pull_request(title, body, source, target, draft=draft)
+        except Exception as exc:
+            self.error.emit(f"PR create failed: {exc}")
+            return
+        self.info.emit(f"PR #{pr.number} created")
+        await self.list_pull_requests()
+
+    async def merge_pull_request(self, number: int, *, method: str = "merge") -> None:
+        if self._path is None:
+            return
+        try:
+            remotes = await self._workers.submit(self._engine.remotes, self._path)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        provider = None
+        for r in remotes:
+            from pygit.domain.hosting import parse_remote_url
+
+            repo = parse_remote_url(r.fetch_url)
+            if repo is None:
+                continue
+            cred = KeyringStore().lookup(repo.host)
+            token = cred[1] if cred else None
+            provider = detect_provider([r.fetch_url], token=token)
+            if provider is not None:
+                break
+        if provider is None:
+            self.error.emit("no hosting provider with credentials")
+            return
+        try:
+            await provider.merge_pull_request(number, method=method)
+        except Exception as exc:
+            self.error.emit(f"PR merge failed: {exc}")
+            return
+        self.info.emit(f"PR #{number} merged ({method})")
+        await self.list_pull_requests()
+        await self.fetch(prune=True)
 
     async def revert_commit(self, sha: str) -> None:
         if self._path is None:

@@ -33,6 +33,7 @@ from pygit.ui.widgets.command_palette import Command, CommandPalette
 from pygit.ui.widgets.dialogs import (
     CloneDialog,
     CreateBranchDialog,
+    CreatePrDialog,
     CreateTagDialog,
     CredentialsDialog,
     PushDialog,
@@ -126,6 +127,9 @@ class MainWindow(QMainWindow):
         repo_menu.addSeparator()
         repo_menu.addAction(QAction(_("Interactive &Rebase..."), self, triggered=self._on_rebase))
         repo_menu.addAction(QAction(_("Show Reflog..."), self, triggered=self._on_reflog))
+        repo_menu.addSeparator()
+        repo_menu.addAction(QAction(_("&List Pull Requests..."), self, triggered=self._on_list_prs))
+        repo_menu.addAction(QAction(_("Create &PR..."), self, triggered=self._on_create_pr))
         repo_menu.addSeparator()
         repo_menu.addAction(QAction(_("&Fetch"), self, triggered=self._on_fetch))
         repo_menu.addAction(QAction(_("&Pull"), self, triggered=self._on_pull))
@@ -412,6 +416,52 @@ class MainWindow(QMainWindow):
             dlg.exec()
 
         self._spawn(run())
+
+    # --- Slots: hosting -------------------------------------------------------
+
+    def _on_list_prs(self) -> None:
+        if self._vm is None:
+            return
+
+        async def run() -> None:
+            await self._vm.list_pull_requests()
+
+        self._spawn(run())
+
+        # Mostrar lista en un diálogo simple con PrPanel.
+        from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+        from pygit.ui.widgets.pr_panel import PrPanel
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(_("Pull Requests"))
+        dlg.resize(900, 480)
+        layout = QVBoxLayout(dlg)
+        panel = PrPanel()
+        layout.addWidget(panel)
+
+        def on_prs(items: list[object]) -> None:
+            panel.set_items(items)  # type: ignore[arg-type]
+
+        self._vm.pull_requests_changed.connect(on_prs)
+        panel.refresh_requested.connect(lambda: self._spawn(self._vm.list_pull_requests()))
+        panel.merge_requested.connect(lambda n: self._spawn(self._vm.merge_pull_request(n)))
+        import contextlib
+
+        dlg.exec()
+        with contextlib.suppress(RuntimeError, TypeError):
+            self._vm.pull_requests_changed.disconnect(on_prs)
+
+    def _on_create_pr(self) -> None:
+        if self._vm is None:
+            return
+        dlg = CreatePrDialog(self)
+        if not dlg.exec():
+            return
+        title, body, source, target, draft = dlg.values()
+        if not title or not source or not target:
+            return
+        self._spawn(self._vm.create_pull_request(title, body, source, target, draft=draft))
 
     # --- Slots: feedback / palette --------------------------------------------
 

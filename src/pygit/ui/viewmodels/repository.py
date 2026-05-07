@@ -1,11 +1,9 @@
 """ViewModel de un repositorio abierto.
 
-Coordina llamadas al :class:`GitEngine` (en hilos worker) con la UI vía
-señales Qt. La VM **no** ejecuta ``pygit2`` en el hilo UI: cualquier acceso
-pasa por :meth:`WorkerPool.submit`.
-
-Las señales emiten objetos del dominio (``HeadInfo``, listas de refs y
-``CommitSummary``). Los modelos Qt viven en :mod:`pygit.ui.widgets`.
+Coordina llamadas al :class:`GitEngine` y al módulo
+:mod:`pygit.domain.git.writer` (en hilos worker) con la UI vía señales Qt.
+La VM **no** ejecuta ``pygit2`` en el hilo UI: cualquier acceso pasa por
+:meth:`WorkerPool.submit`.
 """
 
 from __future__ import annotations
@@ -14,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
+from pygit.domain.git import undo, writer
 from pygit.domain.git.diff import DiffEngine
 from pygit.domain.git.graph import assign_lanes
 
@@ -30,6 +29,8 @@ if TYPE_CHECKING:
         RemoteRef,
         TagRef,
     )
+    from pygit.domain.git.undo import Snapshot
+    from pygit.domain.git.writer import CommitOptions, StatusEntry
     from pygit.infra.workers import WorkerPool
 
 
@@ -40,10 +41,13 @@ class RepositoryVM(QObject):
     branches_changed = Signal(list)
     tags_changed = Signal(list)
     remotes_changed = Signal(list)
-    history_changed = Signal(list, list)  # (commits, graph_rows)
+    history_changed = Signal(list, list)
+    status_changed = Signal(list)
     path_changed = Signal(object)
-    diff_changed = Signal(object)  # DiffResult
+    diff_changed = Signal(object)
+    undo_state_changed = Signal(int, int)  # (undo_size, redo_size)
     error = Signal(str)
+    info = Signal(str)
 
     def __init__(self, engine: GitEngine, workers: WorkerPool) -> None:
         super().__init__()
@@ -52,7 +56,8 @@ class RepositoryVM(QObject):
         self._diff = DiffEngine()
         self._path: Path | None = None
         self._head: HeadInfo | None = None
-        self._selected_sha: str | None = None
+        self._undo: list[Snapshot] = []
+        self._redo: list[Snapshot] = []
 
     @property
     def path(self) -> Path | None:
@@ -85,6 +90,7 @@ class RepositoryVM(QObject):
                 self._engine.walk_history, path
             )
             graph: list[GraphRow] = await self._workers.submit(assign_lanes, history)
+            status: list[StatusEntry] = await self._workers.submit(writer.list_status, path)
         except Exception as exc:
             self.error.emit(str(exc))
             return
@@ -95,11 +101,11 @@ class RepositoryVM(QObject):
         self.tags_changed.emit(tags)
         self.remotes_changed.emit(remotes)
         self.history_changed.emit(history, graph)
+        self.status_changed.emit(status)
 
     async def select_commit(self, sha: str) -> None:
         if self._path is None:
             return
-        self._selected_sha = sha
         try:
             diff: DiffResult = await self._workers.submit(
                 self._diff.diff_commit_to_parent, self._path, sha
@@ -108,6 +114,230 @@ class RepositoryVM(QObject):
             self.error.emit(str(exc))
             return
         self.diff_changed.emit(diff)
+
+    # --- Writes (with undo snapshot) --------------------------------------------
+
+    async def _capture_snapshot(self, label: str) -> None:
+        if self._path is None:
+            return
+        snap = await self._workers.submit(undo.snapshot, self._path, label)
+        self._undo.append(snap)
+        self._redo.clear()
+        self.undo_state_changed.emit(len(self._undo), len(self._redo))
+
+    async def _emit_undo_state(self) -> None:
+        self.undo_state_changed.emit(len(self._undo), len(self._redo))
+
+    async def stage_paths(self, paths: list[str]) -> None:
+        if self._path is None or not paths:
+            return
+        try:
+            await self._workers.submit(writer.stage_paths, self._path, paths)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def unstage_paths(self, paths: list[str]) -> None:
+        if self._path is None or not paths:
+            return
+        try:
+            await self._workers.submit(writer.unstage_paths, self._path, paths)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def discard_paths(self, paths: list[str]) -> None:
+        if self._path is None or not paths:
+            return
+        try:
+            await self._workers.submit(writer.discard_paths, self._path, paths)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def commit(self, options: CommitOptions) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"commit: {options.summary[:40]}")
+        try:
+            sha = await self._workers.submit(writer.commit, self._path, options)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        self.info.emit(f"committed {sha[:7]}")
+        await self.refresh()
+
+    async def create_branch(self, name: str, target_sha: str | None = None) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"branch+: {name}")
+        try:
+            await self._workers.submit(writer.create_branch, self._path, name, target_sha)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def delete_branch(self, name: str, *, force: bool = False) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"branch-: {name}")
+        try:
+            await self._workers.submit(writer.delete_branch, self._path, name, force=force)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def rename_branch(self, old_name: str, new_name: str) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"branch~: {old_name}→{new_name}")
+        try:
+            await self._workers.submit(writer.rename_branch, self._path, old_name, new_name)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def checkout_branch(self, name: str) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"checkout: {name}")
+        try:
+            await self._workers.submit(writer.checkout_branch, self._path, name)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def merge_branch(self, name: str, *, no_ff: bool = False, squash: bool = False) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"merge: {name}")
+        try:
+            result = await self._workers.submit(
+                writer.merge_branch, self._path, name, no_ff=no_ff, squash=squash
+            )
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        if result.conflicts:
+            self.error.emit(f"merge produced {len(result.conflicts)} conflicts")
+        else:
+            self.info.emit("merge ok" if not result.up_to_date else "already up-to-date")
+        await self.refresh()
+
+    async def stash_save(self, message: str = "", *, include_untracked: bool = False) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot("stash save")
+        try:
+            await self._workers.submit(
+                writer.stash_save, self._path, message, include_untracked=include_untracked
+            )
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def stash_pop(self, index: int = 0) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"stash pop {index}")
+        try:
+            await self._workers.submit(writer.stash_pop, self._path, index)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def create_tag(self, name: str, target_sha: str, *, message: str = "") -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"tag+: {name}")
+        try:
+            if message:
+                await self._workers.submit(
+                    writer.create_annotated_tag, self._path, name, target_sha, message
+                )
+            else:
+                await self._workers.submit(
+                    writer.create_lightweight_tag, self._path, name, target_sha
+                )
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def delete_tag(self, name: str) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"tag-: {name}")
+        try:
+            await self._workers.submit(writer.delete_tag, self._path, name)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def reset(self, target_sha: str, *, mode: str = "mixed") -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"reset {mode} {target_sha[:7]}")
+        try:
+            await self._workers.submit(writer.reset, self._path, target_sha, mode=mode)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    async def revert_commit(self, sha: str) -> None:
+        if self._path is None:
+            return
+        await self._capture_snapshot(f"revert {sha[:7]}")
+        try:
+            await self._workers.submit(writer.revert_commit, self._path, sha)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        await self.refresh()
+
+    # --- Undo / Redo -----------------------------------------------------------
+
+    async def undo(self) -> None:
+        if self._path is None or not self._undo:
+            return
+        snap = self._undo.pop()
+        # Capture forward snapshot for redo before restoring.
+        forward = await self._workers.submit(undo.snapshot, self._path, f"redo:{snap.label}")
+        self._redo.append(forward)
+        try:
+            await self._workers.submit(undo.restore, self._path, snap)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        self.info.emit(f"undid: {snap.label}")
+        self.undo_state_changed.emit(len(self._undo), len(self._redo))
+        await self.refresh()
+
+    async def redo(self) -> None:
+        if self._path is None or not self._redo:
+            return
+        snap = self._redo.pop()
+        backward = await self._workers.submit(undo.snapshot, self._path, f"undo:{snap.label}")
+        self._undo.append(backward)
+        try:
+            await self._workers.submit(undo.restore, self._path, snap)
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        self.info.emit(f"redid: {snap.label}")
+        self.undo_state_changed.emit(len(self._undo), len(self._redo))
+        await self.refresh()
 
 
 __all__ = ["RepositoryVM"]

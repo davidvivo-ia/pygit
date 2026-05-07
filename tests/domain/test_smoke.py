@@ -30,7 +30,9 @@ def test_imports() -> None:
     import pygit.domain.git.errors
     import pygit.domain.git.graph
     import pygit.domain.git.models
+    import pygit.domain.git.undo
     import pygit.domain.git.version
+    import pygit.domain.git.writer
     import pygit.domain.hosting
     import pygit.infra.config
     import pygit.infra.fs
@@ -48,9 +50,11 @@ def test_imports() -> None:
     import pygit.ui.widgets.blame_view
     import pygit.ui.widgets.command_palette
     import pygit.ui.widgets.commits_table
+    import pygit.ui.widgets.dialogs
     import pygit.ui.widgets.diff_view
     import pygit.ui.widgets.graph_delegate
-    import pygit.ui.widgets.refs_tree  # noqa: F401
+    import pygit.ui.widgets.refs_tree
+    import pygit.ui.widgets.wip_panel  # noqa: F401
 
 
 def test_default_config_when_file_missing(tmp_path: Path) -> None:

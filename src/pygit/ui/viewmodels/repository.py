@@ -15,10 +15,13 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
+from pygit.domain.git.graph import assign_lanes
+
 if TYPE_CHECKING:
     from pathlib import Path
 
     from pygit.domain.git.engine import GitEngine
+    from pygit.domain.git.graph import GraphRow
     from pygit.domain.git.models import (
         BranchRef,
         CommitSummary,
@@ -36,7 +39,9 @@ class RepositoryVM(QObject):
     branches_changed = Signal(list)  # list[BranchRef]
     tags_changed = Signal(list)  # list[TagRef]
     remotes_changed = Signal(list)  # list[RemoteRef]
-    history_changed = Signal(list)  # list[CommitSummary]
+    # (commits, graph_rows) — same length, emitted atómicamente para que el
+    # modelo Qt pueda actualizar ambas listas en un único beginResetModel.
+    history_changed = Signal(list, list)
     path_changed = Signal(object)  # Path | None
     error = Signal(str)
 
@@ -77,6 +82,7 @@ class RepositoryVM(QObject):
             history: list[CommitSummary] = await self._workers.submit(
                 self._engine.walk_history, path
             )
+            graph: list[GraphRow] = await self._workers.submit(assign_lanes, history)
         except Exception as exc:
             self.error.emit(str(exc))
             return
@@ -86,7 +92,7 @@ class RepositoryVM(QObject):
         self.branches_changed.emit(branches)
         self.tags_changed.emit(tags)
         self.remotes_changed.emit(remotes)
-        self.history_changed.emit(history)
+        self.history_changed.emit(history, graph)
 
 
 __all__ = ["RepositoryVM"]

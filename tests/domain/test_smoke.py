@@ -26,6 +26,7 @@ def test_imports() -> None:
     import pygit.domain.git.cli
     import pygit.domain.git.engine
     import pygit.domain.git.errors
+    import pygit.domain.git.graph
     import pygit.domain.git.models
     import pygit.domain.git.version
     import pygit.domain.hosting
@@ -43,6 +44,7 @@ def test_imports() -> None:
     import pygit.ui.views.splash
     import pygit.ui.widgets
     import pygit.ui.widgets.commits_table
+    import pygit.ui.widgets.graph_delegate
     import pygit.ui.widgets.refs_tree  # noqa: F401
 
 

@@ -17,6 +17,7 @@ from pygit.domain.git.errors import (
     NotAGitRepositoryError,
     RepositoryNotFoundError,
 )
+from pygit.domain.git.graph import GraphRow, assign_lanes, max_lane_width
 from pygit.domain.git.models import (
     BranchRef,
     CommitSummary,
@@ -36,10 +37,13 @@ __all__ = [
     "GitEngine",
     "GitError",
     "GitVersion",
+    "GraphRow",
     "HeadInfo",
     "NotAGitRepositoryError",
     "RemoteRef",
     "RepositoryNotFoundError",
     "Signature",
     "TagRef",
+    "assign_lanes",
+    "max_lane_width",
 ]

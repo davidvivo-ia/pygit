@@ -40,7 +40,7 @@ class RepositoryView(QWidget):
         vm.branches_changed.connect(self._refs.set_branches)
         vm.tags_changed.connect(self._refs.set_tags)
         vm.remotes_changed.connect(self._refs.set_remotes)
-        vm.history_changed.connect(self._commits.set_commits)
+        vm.history_changed.connect(self._commits.set_history)
 
 
 __all__ = ["RepositoryView"]

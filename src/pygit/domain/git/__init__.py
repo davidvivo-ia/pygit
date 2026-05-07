@@ -9,7 +9,19 @@ Tabla de decisión motor → operación (vivirá ampliada en docs/architecture.m
 
 from __future__ import annotations
 
+from pygit.domain.git.blame import BlameEngine, BlameLine
 from pygit.domain.git.cli import GitCli
+from pygit.domain.git.diff import (
+    DiffEngine,
+    DiffLine,
+    DiffResult,
+    FileDiff,
+    FileStatus,
+    Hunk,
+    LineOrigin,
+    file_history,
+    search_pickaxe,
+)
 from pygit.domain.git.engine import GitEngine
 from pygit.domain.git.errors import (
     GitCliError,
@@ -30,8 +42,15 @@ from pygit.domain.git.version import MIN_SUPPORTED, GitVersion
 
 __all__ = [
     "MIN_SUPPORTED",
+    "BlameEngine",
+    "BlameLine",
     "BranchRef",
     "CommitSummary",
+    "DiffEngine",
+    "DiffLine",
+    "DiffResult",
+    "FileDiff",
+    "FileStatus",
     "GitCli",
     "GitCliError",
     "GitEngine",
@@ -39,11 +58,15 @@ __all__ = [
     "GitVersion",
     "GraphRow",
     "HeadInfo",
+    "Hunk",
+    "LineOrigin",
     "NotAGitRepositoryError",
     "RemoteRef",
     "RepositoryNotFoundError",
     "Signature",
     "TagRef",
     "assign_lanes",
+    "file_history",
     "max_lane_width",
+    "search_pickaxe",
 ]

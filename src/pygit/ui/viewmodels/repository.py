@@ -5,8 +5,7 @@ señales Qt. La VM **no** ejecuta ``pygit2`` en el hilo UI: cualquier acceso
 pasa por :meth:`WorkerPool.submit`.
 
 Las señales emiten objetos del dominio (``HeadInfo``, listas de refs y
-``CommitSummary``). Los modelos Qt (``QAbstractTableModel``, etc.) viven
-en :mod:`pygit.ui.widgets`; la VM no los conoce para mantener separación.
+``CommitSummary``). Los modelos Qt viven en :mod:`pygit.ui.widgets`.
 """
 
 from __future__ import annotations
@@ -15,11 +14,13 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
+from pygit.domain.git.diff import DiffEngine
 from pygit.domain.git.graph import assign_lanes
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from pygit.domain.git.diff import DiffResult
     from pygit.domain.git.engine import GitEngine
     from pygit.domain.git.graph import GraphRow
     from pygit.domain.git.models import (
@@ -35,22 +36,23 @@ if TYPE_CHECKING:
 class RepositoryVM(QObject):
     """Estado y operaciones de un repositorio en la UI."""
 
-    head_changed = Signal(object)  # HeadInfo
-    branches_changed = Signal(list)  # list[BranchRef]
-    tags_changed = Signal(list)  # list[TagRef]
-    remotes_changed = Signal(list)  # list[RemoteRef]
-    # (commits, graph_rows) — same length, emitted atómicamente para que el
-    # modelo Qt pueda actualizar ambas listas en un único beginResetModel.
-    history_changed = Signal(list, list)
-    path_changed = Signal(object)  # Path | None
+    head_changed = Signal(object)
+    branches_changed = Signal(list)
+    tags_changed = Signal(list)
+    remotes_changed = Signal(list)
+    history_changed = Signal(list, list)  # (commits, graph_rows)
+    path_changed = Signal(object)
+    diff_changed = Signal(object)  # DiffResult
     error = Signal(str)
 
     def __init__(self, engine: GitEngine, workers: WorkerPool) -> None:
         super().__init__()
         self._engine = engine
         self._workers = workers
+        self._diff = DiffEngine()
         self._path: Path | None = None
         self._head: HeadInfo | None = None
+        self._selected_sha: str | None = None
 
     @property
     def path(self) -> Path | None:
@@ -63,7 +65,7 @@ class RepositoryVM(QObject):
     async def open(self, path: Path) -> None:
         try:
             resolved = await self._workers.submit(self._engine.discover, path)
-        except Exception as exc:  # superficie pública: traduce a señal
+        except Exception as exc:
             self.error.emit(str(exc))
             return
         self._path = resolved
@@ -93,6 +95,19 @@ class RepositoryVM(QObject):
         self.tags_changed.emit(tags)
         self.remotes_changed.emit(remotes)
         self.history_changed.emit(history, graph)
+
+    async def select_commit(self, sha: str) -> None:
+        if self._path is None:
+            return
+        self._selected_sha = sha
+        try:
+            diff: DiffResult = await self._workers.submit(
+                self._diff.diff_commit_to_parent, self._path, sha
+            )
+        except Exception as exc:
+            self.error.emit(str(exc))
+            return
+        self.diff_changed.emit(diff)
 
 
 __all__ = ["RepositoryVM"]

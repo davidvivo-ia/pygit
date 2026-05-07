@@ -28,6 +28,7 @@ from pygit.domain.git.models import HeadInfo
 from pygit.ui.i18n import gettext as _
 from pygit.ui.viewmodels.repository import RepositoryVM
 from pygit.ui.views.repository_view import RepositoryView
+from pygit.ui.widgets.command_palette import Command, CommandPalette
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine
@@ -85,6 +86,16 @@ class MainWindow(QMainWindow):
         action_refresh.setShortcut(QKeySequence("F5"))
         action_refresh.triggered.connect(self._on_refresh)
         repo_menu.addAction(action_refresh)
+
+        action_palette = QAction(_("&Command Palette..."), self)
+        action_palette.setShortcut(QKeySequence("Ctrl+Shift+P"))
+        action_palette.triggered.connect(self._on_command_palette)
+        # También aceptamos Ctrl+P para paridad con VS Code.
+        action_palette_alt = QAction(self)
+        action_palette_alt.setShortcut(QKeySequence("Ctrl+P"))
+        action_palette_alt.triggered.connect(self._on_command_palette)
+        self.addAction(action_palette_alt)
+        repo_menu.addAction(action_palette)
 
         help_menu = menubar.addMenu(_("&Help"))
         action_about = QAction(_("&About pygit"), self)
@@ -159,6 +170,38 @@ class MainWindow(QMainWindow):
         if not isinstance(path, Path):
             return
         self.setWindowTitle(f"pygit {__version__} — {path}")
+
+    def _on_command_palette(self) -> None:
+        palette = CommandPalette(self)
+        commands = self._build_commands()
+        palette.set_commands(commands)
+        palette.exec()
+
+    def _build_commands(self) -> list[Command]:
+        cmds: list[Command] = [
+            Command(
+                id="file.open_repository",
+                title=_("Open Repository..."),
+                category="file",
+                callback=self._on_open_repository,
+            ),
+            Command(
+                id="file.quit",
+                title=_("Quit"),
+                category="file",
+                callback=self.close,
+            ),
+        ]
+        if self._vm is not None:
+            cmds.append(
+                Command(
+                    id="repo.refresh",
+                    title=_("Refresh"),
+                    category="repository",
+                    callback=self._on_refresh,
+                )
+            )
+        return cmds
 
     def _on_head_changed(self, head: object) -> None:
         bar = self.statusBar()

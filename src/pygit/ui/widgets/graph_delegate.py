@@ -1,31 +1,21 @@
 """Delegate Qt que pinta la columna Graph.
 
 Toma los datos pre-calculados (:class:`pygit.domain.git.graph.GraphRow`) del
-modelo y los traduce a líneas + punto. Necesita la fila actual y la
-anterior; ambos accesos van por :meth:`CommitsModel.graph_row`.
+modelo y los traduce a líneas + punto. Sólo necesita la fila actual y la
+anterior; ambas se leen vía :meth:`CommitsModel.graph_row`.
 
-Convención de pintura:
+Estética:
 
-- Fila partida en mitad superior (de ``top`` a ``mid``) y mitad inferior
-  (de ``mid`` a ``bottom``). El punto del commit se sitúa en ``mid``.
-- En la mitad superior se dibujan las líneas que vienen de la fila previa
-  (``prev.lanes``):
-    * Si la lane termina aquí (``i in row.incoming``): línea diagonal/recta
-      desde ``(i, top)`` hasta ``(row.lane, mid)``.
-    * En caso contrario, vertical pasando por ``(i, top)``→``(i, mid)``.
-- En la mitad inferior se dibujan las líneas hacia la fila siguiente
-  (``row.lanes``):
-    * Si la lane arranca en este commit (``i in row.outgoing`` y la columna
-      no estaba en ``prev.lanes``): diagonal/recta desde ``(row.lane, mid)``
-      a ``(i, bottom)``.
-    * Si la lane es la del commit (``i == row.lane``) y continúa: vertical
-      ``(row.lane, mid)``→``(row.lane, bottom)``.
-    * Si la lane existe en ``row.lanes`` y existía en ``prev.lanes``:
-      vertical pasando por ``(i, mid)``→``(i, bottom)``.
+- Diagonales dibujadas como curvas cúbicas de Bézier: puntos de control
+  desplazados en vertical para que la línea salga vertical del dot y
+  entre vertical al siguiente commit. Esto reproduce el look
+  SourceGit/GitKraken sin coste apreciable (unas decenas de rows visibles).
+- Verticales rectas.
+- Dot circular con borde ligeramente más oscuro para dar contraste.
 
-Paleta determinística: el modelo entrega un ``color_index`` por lane;
-aquí se mapea a un color de una paleta fija (Catppuccin Mocha por
-defecto, agradable en oscuro y claro).
+Paleta: paleta por defecto Catppuccin Mocha (agradable en claro y
+oscuro). Puede sustituirse en runtime con :meth:`set_palette` a partir
+de un tema JSON cargado desde ``pygit.ui.themes.loader``.
 """
 
 from __future__ import annotations
@@ -33,7 +23,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QStyledItemDelegate
 
 from pygit.ui.widgets.commits_table import LANE_WIDTH, CommitsModel
@@ -54,16 +44,42 @@ PALETTE: tuple[str, ...] = (
     "#f5c2e7",  # pink
 )
 
-DOT_RADIUS = 4
-LINE_WIDTH = 2
+DOT_RADIUS = 4.5
+LINE_WIDTH = 2.0
 
 
 class GraphDelegate(QStyledItemDelegate):
-    """Pinta la celda de la columna Graph."""
+    """Pinta la celda de la columna Graph con curvas cúbicas."""
 
     def __init__(self, parent: object = None) -> None:
         super().__init__(parent)
-        self._colors = tuple(QColor(c) for c in PALETTE)
+        self._colors: tuple[QColor, ...] = tuple(QColor(c) for c in PALETTE)
+
+    def set_palette(self, colors: list[str]) -> None:
+        if colors:
+            self._colors = tuple(QColor(c) for c in colors)
+
+    def _pen(self, color_index: int) -> QPen:
+        color = self._colors[color_index % len(self._colors)]
+        pen = QPen(color, LINE_WIDTH)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        return pen
+
+    @staticmethod
+    def _curve(painter: QPainter, x1: float, y1: float, x2: float, y2: float) -> None:
+        """Cúbica que sale y entra vertical (paridad SourceGit/GitKraken)."""
+        if x1 == x2:
+            painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+            return
+        dy = (y2 - y1) * 0.55
+        path = QPainterPath(QPointF(x1, y1))
+        path.cubicTo(
+            QPointF(x1, y1 + dy),
+            QPointF(x2, y2 - dy),
+            QPointF(x2, y2),
+        )
+        painter.drawPath(path)
 
     def paint(
         self,
@@ -71,8 +87,7 @@ class GraphDelegate(QStyledItemDelegate):
         option: QStyleOptionViewItem,
         index: QModelIndex,
     ) -> None:
-        # Fondo y selección estándar (alternating rows, hover, etc.).
-        super().paint(painter, option, index)
+        super().paint(painter, option, index)  # fondo/selección
 
         model = index.model()
         if not isinstance(model, CommitsModel):
@@ -99,50 +114,41 @@ class GraphDelegate(QStyledItemDelegate):
             outgoing = set(row.outgoing)
             prev_active = {i for i, c in enumerate(prev_lanes) if c is not None}
 
-            # --- Mitad superior ---------------------------------------------
+            # --- Mitad superior: viene de prev.lanes ------------------------
             for i, color_index in enumerate(prev_lanes):
                 if color_index is None:
                     continue
-                pen_color = self._colors[color_index % len(self._colors)]
-                pen = QPen(pen_color, LINE_WIDTH)
-                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-                painter.setPen(pen)
+                painter.setPen(self._pen(color_index))
                 x_top = lane_x(i)
                 if i in incoming:
-                    painter.drawLine(QPointF(x_top, top), QPointF(x_dot, mid))
+                    self._curve(painter, x_top, top, x_dot, mid)
                 elif i < len(row.lanes) and row.lanes[i] is not None:
                     painter.drawLine(QPointF(x_top, top), QPointF(x_top, mid))
-                # En cualquier otro caso, la lane existía arriba pero no abajo
-                # ni absorbida: línea muerta, no se dibuja.
+                # Otros: lane muerta arriba, no se dibuja.
 
-            # --- Mitad inferior ---------------------------------------------
+            # --- Mitad inferior: sale a row.lanes ---------------------------
             for i, color_index in enumerate(row.lanes):
                 if color_index is None:
                     continue
-                pen_color = self._colors[color_index % len(self._colors)]
-                pen = QPen(pen_color, LINE_WIDTH)
-                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-                painter.setPen(pen)
+                painter.setPen(self._pen(color_index))
                 x_bottom = lane_x(i)
                 if i == row.lane:
-                    # Continuación de la propia lane hacia abajo.
+                    # Propia lane continúa hacia abajo.
                     painter.drawLine(QPointF(x_dot, mid), QPointF(x_bottom, bottom))
                 elif i in outgoing and i not in prev_active:
-                    # Padre nuevo que arranca de este commit.
-                    painter.drawLine(QPointF(x_dot, mid), QPointF(x_bottom, bottom))
+                    # Padre nuevo: curva desde el dot a su nueva columna.
+                    self._curve(painter, x_dot, mid, x_bottom, bottom)
                 elif i in prev_active:
-                    # Lane que pasaba ya y sigue.
+                    # Lane que pasa: sigue vertical.
                     painter.drawLine(QPointF(x_bottom, mid), QPointF(x_bottom, bottom))
                 elif i in outgoing:
-                    # Padre que ya vivía en otra columna pero que recibe edge:
-                    # se traza el edge en la mitad inferior hacia su columna
-                    # destino. (Caso de la "rama lateral que vuelve".)
-                    painter.drawLine(QPointF(x_dot, mid), QPointF(x_bottom, bottom))
+                    # Padre existente en otra columna: curva descendente.
+                    self._curve(painter, x_dot, mid, x_bottom, bottom)
 
             # --- Punto del commit -------------------------------------------
             dot_color = self._colors[row.color % len(self._colors)]
             painter.setBrush(dot_color)
-            painter.setPen(QPen(dot_color.darker(140), 1))
+            painter.setPen(QPen(dot_color.darker(150), 1))
             painter.drawEllipse(QPointF(x_dot, mid), DOT_RADIUS, DOT_RADIUS)
         finally:
             painter.restore()

@@ -1,24 +1,37 @@
-"""Vista de diff side-by-side.
+"""Vista de diff side-by-side con syntax highlighting.
 
 Dos paneles ``QPlainTextEdit`` con scroll vertical sincronizado y resaltado
-por línea (verde añadido, rojo borrado, neutro contexto). La construcción
-de los lados se hace alineando ``-``/``+`` en pares: para cada hunk
-se emparejan deletions con additions consecutivas; las que sobran se
-rellenan con líneas vacías para que el side-by-side cuadre vertical.
+por línea (verde añadido, rojo borrado, neutro contexto). Cada línea se
+pinta con el highlighter de Pygments correspondiente al lexer inferido del
+path (``new_path`` primero, luego ``old_path``, luego texto plano).
 
-Modos contemplados (sólo *side-by-side* en Fase 1.3, los demás llegan en
-pulido):
+Alineación side-by-side: para cada hunk, se emparejan deletions (``-``) con
+additions consecutivas (``+``); las sobras se rellenan con líneas vacías
+para que el par cuadre verticalmente.
 
-- *side-by-side*: dos columnas.
-- *unified*: una columna con prefijo ``+/-/`` (no implementado todavía).
-- *swipe*: animación entre antes/después (futuro).
-- *blend*: superposición translúcida (futuro).
+Modos previstos:
+
+- *side-by-side*: dos columnas (implementado).
+- *unified*: una columna con prefijo (Fase 9).
+- *swipe* / *blend*: futuros.
 """
 
 from __future__ import annotations
 
+from pygments import lex
+from pygments.lexers import guess_lexer_for_filename
+from pygments.lexers.special import TextLexer
+from pygments.token import Token
+from pygments.util import ClassNotFound
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QTextCursor
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QSyntaxHighlighter,
+    QTextCharFormat,
+    QTextCursor,
+    QTextDocument,
+)
 from PySide6.QtWidgets import (
     QLabel,
     QPlainTextEdit,
@@ -30,10 +43,73 @@ from PySide6.QtWidgets import (
 
 from pygit.domain.git.diff import DiffResult, FileDiff, Hunk, LineOrigin
 
+# Colores por línea (Catppuccin Mocha-friendly).
 ADDITION_BG = QColor("#16331a")
 DELETION_BG = QColor("#3a1e23")
 HEADER_BG = QColor("#1f2233")
 CONTEXT_BG = QColor("#1e1e2e")
+
+# Colores por token para syntax highlighting.
+_TOKEN_COLORS: dict[object, str] = {
+    Token.Keyword: "#cba6f7",
+    Token.Keyword.Namespace: "#cba6f7",
+    Token.Name.Builtin: "#94e2d5",
+    Token.Name.Function: "#89b4fa",
+    Token.Name.Class: "#f9e2af",
+    Token.Name.Decorator: "#fab387",
+    Token.Literal.String: "#a6e3a1",
+    Token.Literal.String.Doc: "#a6adc8",
+    Token.Literal.Number: "#fab387",
+    Token.Comment: "#6c7086",
+    Token.Operator: "#f5c2e7",
+    Token.Punctuation: "#cdd6f4",
+}
+
+
+def _token_format(color_hex: str) -> QTextCharFormat:
+    fmt = QTextCharFormat()
+    fmt.setForeground(QColor(color_hex))
+    return fmt
+
+
+class _PygmentsHighlighter(QSyntaxHighlighter):
+    """Aplica ``Pygments`` línea a línea sobre el documento."""
+
+    def __init__(self, document: QTextDocument, filename: str | None) -> None:
+        super().__init__(document)
+        self._lexer = self._resolve_lexer(filename)
+        # Formatos precomputados por token (para no crearlos por línea).
+        self._formats = {tok: _token_format(color) for tok, color in _TOKEN_COLORS.items()}
+
+    def _resolve_lexer(self, filename: str | None) -> object:
+        if not filename:
+            return TextLexer()
+        try:
+            return guess_lexer_for_filename(filename, "")
+        except ClassNotFound:
+            return TextLexer()
+
+    def highlightBlock(self, text: str) -> None:  # noqa: N802 — Qt API
+        if not text or isinstance(self._lexer, TextLexer):
+            return
+        try:
+            tokens = list(lex(text, self._lexer))
+        except Exception:
+            return
+        offset = 0
+        for token_type, value in tokens:
+            fmt = self._formats.get(token_type)
+            if fmt is None:
+                # Sube por la jerarquía Token.X.Y → Token.X → Token.
+                parent = token_type.parent
+                while parent is not None:
+                    fmt = self._formats.get(parent)
+                    if fmt is not None:
+                        break
+                    parent = parent.parent
+            if fmt is not None:
+                self.setFormat(offset, len(value), fmt)
+            offset += len(value)
 
 
 class _DiffPane(QPlainTextEdit):
@@ -46,6 +122,11 @@ class _DiffPane(QPlainTextEdit):
         font.setPointSize(10)
         self.setFont(font)
         self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance(" "))
+        self._highlighter: _PygmentsHighlighter | None = None
+
+    def set_highlighter_for(self, filename: str | None) -> None:
+        # Reemplaza el highlighter previo (Qt destruirá el anterior al perder ref).
+        self._highlighter = _PygmentsHighlighter(self.document(), filename)
 
 
 def _pair_hunk_lines(hunk: Hunk) -> list[tuple[str | None, str | None]]:
@@ -133,6 +214,17 @@ class DiffView(QWidget):
         plus = diff.total_additions
         minus = diff.total_deletions
         self._header.setText(f"{len(diff.files)} files changed · +{plus} -{minus}")
+
+        # Highlighter based on the first file's path (most common case:
+        # user selects a commit and the diff shows one file at a time).
+        # For multi-file diffs, we keep the highlighter of the first file;
+        # per-file highlighters would require multi-document panes (Fase 9).
+        first_path = next(
+            (f.new_path or f.old_path for f in diff.files if (f.new_path or f.old_path)),
+            None,
+        )
+        self._left.set_highlighter_for(first_path)
+        self._right.set_highlighter_for(first_path)
 
         for file in diff.files:
             self._render_file(file)

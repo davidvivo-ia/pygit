@@ -1,0 +1,15 @@
+{
+  "name": "high-contrast",
+  "kind": "high-contrast",
+  "qss": "QMainWindow, QDialog, QMenuBar, QMenu, QWidget { background-color: #000000; color: #ffffff; font-weight: 500; } QLineEdit, QPlainTextEdit, QTextEdit, QTableView, QTreeView, QListView, QListWidget { background-color: #000000; color: #ffffff; selection-background-color: #ffff00; selection-color: #000000; border: 2px solid #ffffff; } QHeaderView::section { background-color: #202020; color: #ffffff; border: 1px solid #ffffff; padding: 4px; font-weight: bold; } QMenuBar::item:selected, QMenu::item:selected { background-color: #ffff00; color: #000000; } QPushButton { background-color: #000000; border: 2px solid #ffffff; padding: 6px 12px; color: #ffffff; font-weight: bold; } QPushButton:hover { background-color: #ffff00; color: #000000; } QPushButton:focus { outline: 3px solid #00ffff; } QSplitter::handle { background-color: #ffffff; } QStatusBar { border-top: 2px solid #ffffff; }",
+  "graph_palette": [
+    "#00ffff",
+    "#00ff00",
+    "#ffff00",
+    "#ff0000",
+    "#ff00ff",
+    "#00ffcc",
+    "#ff8800",
+    "#ff66cc"
+  ]
+}

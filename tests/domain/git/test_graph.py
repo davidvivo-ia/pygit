@@ -38,17 +38,33 @@ def test_linear_history_single_lane() -> None:
     assert rows[2].lanes == (None,)
 
 
-def test_two_independent_roots_share_lane() -> None:
-    """Dos roots aislados consecutivos reutilizan la primera lane.
+def test_two_independent_roots_get_distinct_lanes() -> None:
+    """Dos roots aislados consecutivos NO deben compartir lane.
 
-    Comportamiento aceptado para Phase 1.2: el algoritmo no penaliza la
-    reutilización inmediata. Mejora futura (separación visual de
-    historias desconectadas) pendiente como pulido.
+    El algoritmo aplica un cooldown de 1 fila a las lanes recién liberadas
+    para que la separación entre historias desconectadas sea visible.
     """
     rows = assign_lanes([_commit("a"), _commit("b")])
     assert rows[0].lane == 0
-    assert rows[1].lane == 0
-    assert rows[0].color == rows[1].color
+    assert rows[1].lane == 1
+    # Colores distintos porque son índices de lane distintos.
+    assert rows[0].color != rows[1].color
+
+
+def test_reuse_lane_after_cooldown_elapses() -> None:
+    # DAG:
+    #   a  (root, lane 0)
+    #   b  (root, lane 1 por cooldown)
+    #   c  (parent d, expects d — puede reusar lane 0 porque hace >1 fila
+    #       que quedó libre y no se procesó nada en su lane)
+    #   d  (root, lane 0 idealmente)
+    rows = assign_lanes([_commit("a"), _commit("b"), _commit("c", "d"), _commit("d")])
+    assert rows[0].lane == 0
+    assert rows[1].lane == 1
+    # `c` allocates a new lane because both 0 and 1 are in cooldown.
+    # `d` lands on c's lane (via incoming).
+    assert rows[2].lane == 2
+    assert rows[3].lane == 2
 
 
 def test_simple_branch_and_merge() -> None:
@@ -107,30 +123,39 @@ def test_octopus_merge_three_parents() -> None:
     assert rows[3].lane == 2
 
 
-def test_lane_reuse_after_parallel_branches_end() -> None:
-    # Dos ramas paralelas que terminan, luego un nuevo root aislado.
-    # DAG:  X       Y
-    #       |       |
-    #       X1     Y1
-    #
-    #       Z (root aislado, posterior en walker order)
+def test_linear_reuse_via_incoming() -> None:
+    # Cadena larga sobre lane 0: cada commit reusa lane 0 vía incoming
+    # (su sha == active[0]). Esto es el patrón normal en repos reales.
+    chain = [_commit(f"c{i:03d}", f"c{i + 1:03d}") for i in range(20)]
+    chain.append(_commit("c020"))
+    rows = assign_lanes(chain)
+    # Todos en lane 0 salvo si hubiera divergencia.
+    assert all(r.lane == 0 for r in rows)
+    # Y el ancho total es 1.
+    assert max_lane_width(rows) == 1
+
+
+def test_disconnected_heads_do_not_share_lanes() -> None:
+    # Tres cadenas cortas totalmente aisladas — cada una debe vivir en su
+    # propia columna. Confirma que el cooldown persiste hasta que la lane
+    # es reclamada estructuralmente vía incoming.
     rows = assign_lanes(
         [
-            _commit("X", "X1"),
-            _commit("Y", "Y1"),
-            _commit("X1"),
-            _commit("Y1"),
-            _commit("Z"),
+            _commit("A", "A2"),
+            _commit("B", "B2"),
+            _commit("C", "C2"),
+            _commit("A2"),
+            _commit("B2"),
+            _commit("C2"),
         ]
     )
     assert rows[0].lane == 0
     assert rows[1].lane == 1
-    assert rows[2].lane == 0
-    assert rows[3].lane == 1
-    # Z reusa la primera lane libre (la 0).
-    assert rows[4].lane == 0
-    # El color de la lane 0 se mantiene tras la reutilización.
-    assert rows[4].color == rows[0].color
+    assert rows[2].lane == 2
+    # Cada terminación reusa su propia lane vía incoming (no roots aislados).
+    assert rows[3].lane == 0
+    assert rows[4].lane == 1
+    assert rows[5].lane == 2
 
 
 def test_max_lane_width_reports_peak() -> None:

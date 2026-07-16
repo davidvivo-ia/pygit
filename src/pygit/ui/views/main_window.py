@@ -114,7 +114,10 @@ class MainWindow(QMainWindow):
         action_redo.triggered.connect(self._on_redo)
         edit_menu.addAction(action_redo)
 
-        menubar.addMenu(_("&View"))
+        view_menu = menubar.addMenu(_("&View"))
+        action_blame = QAction(_("&Blame File..."), self)
+        action_blame.triggered.connect(self._on_blame_file)
+        view_menu.addAction(action_blame)
 
         repo_menu = menubar.addMenu(_("&Repository"))
         action_refresh = QAction(_("&Refresh"), self)
@@ -421,6 +424,48 @@ class MainWindow(QMainWindow):
             lines = [f"{e.when:%Y-%m-%d %H:%M}  {e.new_sha[:7]}  {e.message}" for e in entries]
             text.setPlainText("\n".join(lines))
             layout.addWidget(text)
+            dlg.exec()
+
+        self._spawn(run())
+
+    # --- Slots: blame ---------------------------------------------------------
+
+    def _on_blame_file(self) -> None:
+        if self._vm is None or self._vm.path is None:
+            return
+        path_str, _filter = QFileDialog.getOpenFileName(
+            self,
+            _("Blame File"),
+            str(self._vm.path),
+        )
+        if not path_str:
+            return
+        try:
+            relative = Path(path_str).relative_to(self._vm.path)
+        except ValueError:
+            self._on_repo_error(_("File must be inside the repository"))
+            return
+
+        async def run() -> None:
+            from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+            from pygit.domain.git.blame import BlameEngine
+            from pygit.ui.widgets.blame_view import BlameView
+
+            try:
+                lines = await self._services.workers.submit(
+                    BlameEngine().blame, self._vm.path, str(relative)
+                )
+            except Exception as exc:
+                self._on_repo_error(str(exc))
+                return
+            dlg = QDialog(self)
+            dlg.setWindowTitle(_("Blame: {path}").format(path=str(relative)))
+            dlg.resize(1000, 640)
+            layout = QVBoxLayout(dlg)
+            view = BlameView()
+            view.set_blame(lines)
+            layout.addWidget(view)
             dlg.exec()
 
         self._spawn(run())

@@ -158,9 +158,13 @@ class CommitsTable(QTableView):
         self.setColumnWidth(Column.GRAPH, LANE_WIDTH * 4)
 
         # Import perezoso para evitar ciclos.
+        from pygit.ui.themes import current_graph_palette
         from pygit.ui.widgets.graph_delegate import GraphDelegate
 
         self._graph_delegate = GraphDelegate(self)
+        palette = current_graph_palette()
+        if palette:
+            self._graph_delegate.set_palette(palette)
         self.setItemDelegateForColumn(Column.GRAPH, self._graph_delegate)
 
     def set_history(self, commits: list[CommitSummary], graph: list[GraphRow]) -> None:

@@ -72,6 +72,7 @@ class WipPanel(QWidget):
     unstage_requested = Signal(list)  # list[str]
     discard_requested = Signal(list)  # list[str]
     commit_requested = Signal(str, str, bool, bool)  # title, body, amend, sign_off
+    ai_message_requested = Signal()  # user asked for AI-generated message
 
     def __init__(self) -> None:
         super().__init__()
@@ -142,8 +143,14 @@ class WipPanel(QWidget):
         opts_row.addStretch(1)
         form_layout.addLayout(opts_row)
 
+        buttons_row = QHBoxLayout()
+        btn_ai = QPushButton(_("AI message"))
+        btn_ai.setToolTip(_("Generate a commit message from the staged diff"))
         btn_commit = QPushButton(_("Commit"))
-        form_layout.addWidget(btn_commit)
+        buttons_row.addWidget(btn_ai)
+        buttons_row.addStretch(1)
+        buttons_row.addWidget(btn_commit)
+        form_layout.addRow(buttons_row)
         layout.addWidget(form)
 
         # --- Wiring ---------------------------------------------------------
@@ -152,6 +159,7 @@ class WipPanel(QWidget):
         btn_discard.clicked.connect(self._on_discard)
         btn_unstage.clicked.connect(self._on_unstage)
         btn_commit.clicked.connect(self._on_commit)
+        btn_ai.clicked.connect(self.ai_message_requested.emit)
 
     def set_status(self, entries: list[StatusEntry]) -> None:
         self._unstaged.clear()
@@ -218,6 +226,14 @@ class WipPanel(QWidget):
     def _on_title_changed(self, text: str) -> None:
         n = len(text)
         self._title_counter.setText(f"{n}/50")
+
+    def set_message(self, message: str) -> None:
+        """Rellena title + body a partir de un mensaje libre (útil para IA)."""
+        if not message:
+            return
+        head, _, body = message.strip().partition("\n\n")
+        self._title.setText(head.splitlines()[0][:120])
+        self._body.setPlainText(body.strip())
 
 
 __all__ = ["WipPanel"]

@@ -77,6 +77,7 @@ class RepositoryView(QWidget):
         self._wip.unstage_requested.connect(self._on_unstage)
         self._wip.discard_requested.connect(self._on_discard)
         self._wip.commit_requested.connect(self._on_commit)
+        self._wip.ai_message_requested.connect(self._on_ai_message)
 
     def _on_commit_selected(self, current: QModelIndex, _previous: QModelIndex) -> None:
         if not current.isValid():
@@ -106,6 +107,32 @@ class RepositoryView(QWidget):
         self._spawn(
             self._vm.commit(CommitOptions(summary=title, body=body, amend=amend, sign_off=sign_off))
         )
+
+    def _on_ai_message(self) -> None:
+        # Load AI config; keyring supplies the API key.
+        import contextlib
+
+        from pygit.domain.ai import AiConfig
+        from pygit.domain.credentials import KEYRING_SERVICE
+        from pygit.infra.config import load_config
+
+        cfg = load_config()
+        if not cfg.ai.enabled:
+            return
+        api_key = ""
+        with contextlib.suppress(Exception):
+            import keyring
+
+            api_key = keyring.get_password(f"{KEYRING_SERVICE}-ai", cfg.ai.provider) or ""
+
+        ai_config = AiConfig(provider=cfg.ai.provider, model=cfg.ai.model, api_key=api_key)
+
+        async def run() -> None:
+            message = await self._vm.ai_commit_message(ai_config)
+            if message:
+                self._wip.set_message(message)
+
+        self._spawn(run())
 
     def _spawn(self, coro: Coroutine[Any, Any, None]) -> None:
         task = asyncio.ensure_future(coro)

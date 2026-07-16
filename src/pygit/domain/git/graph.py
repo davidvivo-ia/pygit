@@ -61,11 +61,21 @@ class GraphRow:
 
 
 def _allocate_free_lane(
-    active: list[str | None], colors: list[int], next_color: int
+    active: list[str | None],
+    colors: list[int],
+    next_color: int,
+    *,
+    cooldown: set[int] | None = None,
 ) -> tuple[int, int]:
-    """Devuelve ``(lane_index, next_color)`` reutilizando hueco o extendiendo."""
+    """Devuelve ``(lane_index, next_color)`` reutilizando hueco o extendiendo.
+
+    Si ``cooldown`` se proporciona, se saltan las lanes cuyo índice está en el
+    conjunto: son lanes que quedaron libres en la fila inmediatamente anterior
+    y que reutilizarlas produciría una unión visual engañosa entre historias
+    desconectadas (ver ``test_two_independent_roots_get_distinct_lanes``).
+    """
     for i, slot in enumerate(active):
-        if slot is None:
+        if slot is None and (cooldown is None or i not in cooldown):
             return i, next_color
     active.append(None)
     colors.append(next_color)
@@ -78,6 +88,13 @@ def assign_lanes(commits: list[CommitSummary]) -> list[GraphRow]:
     colors: list[int] = []
     next_color = 0
     rows: list[GraphRow] = []
+    # Cooldown: lanes vacías tras la fila previa. Nunca reasignamos una lane
+    # que esté en cooldown a un commit "nuevo" (root sin incoming). Esto
+    # impide que dos historias desconectadas queden apiladas visualmente en
+    # la misma columna. El cooldown se limpia sólo cuando una lane pasa por
+    # ``incoming`` — es decir, cuando su sha esperada aparece — lo que
+    # garantiza continuidad estructural.
+    cooldown: set[int] = set()
 
     for commit in commits:
         # Lanes que esperaban este commit (sha exacta).
@@ -88,7 +105,7 @@ def assign_lanes(commits: list[CommitSummary]) -> list[GraphRow]:
             for absorbed in incoming[1:]:
                 active[absorbed] = None
         else:
-            my_lane, next_color = _allocate_free_lane(active, colors, next_color)
+            my_lane, next_color = _allocate_free_lane(active, colors, next_color, cooldown=cooldown)
 
         my_color = colors[my_lane]
 
@@ -108,7 +125,9 @@ def assign_lanes(commits: list[CommitSummary]) -> list[GraphRow]:
             if my_lane not in used_lanes:
                 target = my_lane
             else:
-                target, next_color = _allocate_free_lane(active, colors, next_color)
+                target, next_color = _allocate_free_lane(
+                    active, colors, next_color, cooldown=cooldown
+                )
             active[target] = parent_sha
             if target not in used_lanes:
                 outgoing.append(target)
@@ -133,6 +152,12 @@ def assign_lanes(commits: list[CommitSummary]) -> list[GraphRow]:
                 outgoing=tuple(outgoing),
             )
         )
+
+        # Cooldown para la siguiente iteración: cualquier lane vacía tras esta
+        # fila. Una lane sale del cooldown cuando un commit la reclama vía
+        # ``incoming`` (matching de sha), lo que ocurre por definición cuando
+        # forma parte de una cadena de padres.
+        cooldown = {i for i in range(len(active)) if active[i] is None}
 
     return rows
 

@@ -18,20 +18,80 @@ msgstr "&Open Repository..."
 msgid "Open an existing Git repository"
 msgstr "Open an existing Git repository"
 
+msgid "&Clone Repository..."
+msgstr "&Clone Repository..."
+
+msgid "Store HTTPS &credentials..."
+msgstr "Store HTTPS &credentials..."
+
 msgid "&Quit"
 msgstr "&Quit"
 
 msgid "&Edit"
 msgstr "&Edit"
 
+msgid "&Preferences..."
+msgstr "&Preferences..."
+
+msgid "&Undo"
+msgstr "&Undo"
+
+msgid "&Redo"
+msgstr "&Redo"
+
 msgid "&View"
 msgstr "&View"
+
+msgid "&Blame File..."
+msgstr "&Blame File..."
 
 msgid "&Repository"
 msgstr "&Repository"
 
 msgid "&Refresh"
 msgstr "&Refresh"
+
+msgid "&Create Branch..."
+msgstr "&Create Branch..."
+
+msgid "Checkout Branch..."
+msgstr "Checkout Branch..."
+
+msgid "Merge Branch..."
+msgstr "Merge Branch..."
+
+msgid "Create &Tag..."
+msgstr "Create &Tag..."
+
+msgid "&Stash..."
+msgstr "&Stash..."
+
+msgid "Stash Pop"
+msgstr "Stash Pop"
+
+msgid "Interactive &Rebase..."
+msgstr "Interactive &Rebase..."
+
+msgid "Show Reflog..."
+msgstr "Show Reflog..."
+
+msgid "&List Pull Requests..."
+msgstr "&List Pull Requests..."
+
+msgid "Create &PR..."
+msgstr "Create &PR..."
+
+msgid "&Fetch"
+msgstr "&Fetch"
+
+msgid "&Pull"
+msgstr "&Pull"
+
+msgid "Pus&h..."
+msgstr "Pus&h..."
+
+msgid "&Command Palette..."
+msgstr "&Command Palette..."
 
 msgid "&Help"
 msgstr "&Help"
@@ -86,3 +146,228 @@ msgstr "Detached HEAD at {sha}"
 
 msgid "On branch {branch}"
 msgstr "On branch {branch}"
+
+msgid "Unstaged changes"
+msgstr "Unstaged changes"
+
+msgid "Stage"
+msgstr "Stage"
+
+msgid "Stage all"
+msgstr "Stage all"
+
+msgid "Discard"
+msgstr "Discard"
+
+msgid "Staged changes"
+msgstr "Staged changes"
+
+msgid "Unstage"
+msgstr "Unstage"
+
+msgid "Title (max 50)"
+msgstr "Title (max 50)"
+
+msgid "Body — wrap at 72"
+msgstr "Body — wrap at 72"
+
+msgid "Amend"
+msgstr "Amend"
+
+msgid "Sign-off"
+msgstr "Sign-off"
+
+msgid "Commit"
+msgstr "Commit"
+
+msgid "AI message"
+msgstr "AI message"
+
+msgid "Generate a commit message from the staged diff"
+msgstr "Generate a commit message from the staged diff"
+
+msgid "Create branch"
+msgstr "Create branch"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Target (sha or branch, blank=HEAD)"
+msgstr "Target (sha or branch, blank=HEAD)"
+
+msgid "Checkout after create"
+msgstr "Checkout after create"
+
+msgid "Create tag"
+msgstr "Create tag"
+
+msgid "Target (sha)"
+msgstr "Target (sha)"
+
+msgid "Optional — non-empty creates an annotated tag"
+msgstr "Optional — non-empty creates an annotated tag"
+
+msgid "Message"
+msgstr "Message"
+
+msgid "Stash changes"
+msgstr "Stash changes"
+
+msgid "Include untracked"
+msgstr "Include untracked"
+
+msgid "Clone repository"
+msgstr "Clone repository"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Local destination (folder)"
+msgstr "Local destination (folder)"
+
+msgid "Target"
+msgstr "Target"
+
+msgid "Create Pull Request"
+msgstr "Create Pull Request"
+
+msgid "Description (Markdown ok)"
+msgstr "Description (Markdown ok)"
+
+msgid "Title"
+msgstr "Title"
+
+msgid "Source branch"
+msgstr "Source branch"
+
+msgid "Target branch"
+msgstr "Target branch"
+
+msgid "Body"
+msgstr "Body"
+
+msgid "Draft"
+msgstr "Draft"
+
+msgid "Store HTTPS credentials"
+msgstr "Store HTTPS credentials"
+
+msgid "Host"
+msgstr "Host"
+
+msgid "Username"
+msgstr "Username"
+
+msgid "Token / password"
+msgstr "Token / password"
+
+msgid "Push"
+msgstr "Push"
+
+msgid "Force-with-lease"
+msgstr "Force-with-lease"
+
+msgid "Remote"
+msgstr "Remote"
+
+msgid "Checkout"
+msgstr "Checkout"
+
+msgid "Branch name"
+msgstr "Branch name"
+
+msgid "Merge"
+msgstr "Merge"
+
+msgid "Branch to merge into HEAD"
+msgstr "Branch to merge into HEAD"
+
+msgid "Type a command…"
+msgstr "Type a command…"
+
+msgid "Pull Requests"
+msgstr "Pull Requests"
+
+msgid "Refresh"
+msgstr "Refresh"
+
+msgid "Create..."
+msgstr "Create..."
+
+msgid "Merge selected"
+msgstr "Merge selected"
+
+msgid "Reflog"
+msgstr "Reflog"
+
+msgid "Interactive rebase"
+msgstr "Interactive rebase"
+
+msgid "Reorder rows with drag-and-drop. P/R/E/S/F/D set the action."
+msgstr "Reorder rows with drag-and-drop. P/R/E/S/F/D set the action."
+
+msgid "Welcome to pygit"
+msgstr "Welcome to pygit"
+
+msgid "Identity"
+msgstr "Identity"
+
+msgid "These values become your Git user.name/user.email."
+msgstr "These values become your Git user.name/user.email."
+
+msgid "Email"
+msgstr "Email"
+
+msgid "Preferences"
+msgstr "Preferences"
+
+msgid "Language"
+msgstr "Language"
+
+msgid "Theme"
+msgstr "Theme"
+
+msgid "Dark"
+msgstr "Dark"
+
+msgid "Light"
+msgstr "Light"
+
+msgid "AI (opt-in)"
+msgstr "AI (opt-in)"
+
+msgid "Optional. If enabled, pygit can draft commit messages and PR descriptions. Keys are stored in your OS keyring."
+msgstr "Optional. If enabled, pygit can draft commit messages and PR descriptions. Keys are stored in your OS keyring."
+
+msgid "Enable AI features"
+msgstr "Enable AI features"
+
+msgid "Provider"
+msgstr "Provider"
+
+msgid "Model — leave blank for default"
+msgstr "Model — leave blank for default"
+
+msgid "API key (cloud only)"
+msgstr "API key (cloud only)"
+
+msgid "API key"
+msgstr "API key"
+
+msgid "AI"
+msgstr "AI"
+
+msgid "General"
+msgstr "General"
+
+msgid "Preferences saved. Restart to apply language/theme."
+msgstr "Preferences saved. Restart to apply language/theme."
+
+msgid "Blame File"
+msgstr "Blame File"
+
+msgid "File must be inside the repository"
+msgstr "File must be inside the repository"
+
+msgid "Blame: {path}"
+msgstr "Blame: {path}"

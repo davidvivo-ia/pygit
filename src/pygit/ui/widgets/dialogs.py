@@ -171,7 +171,7 @@ class TextInputDialog(_BaseFormDialog):
         self._layout.addRow(self._buttons)
 
     def value(self) -> str:
-        return self.input.text().strip()
+        return str(self.input.text()).strip()
 
 
 __all__ = [

@@ -63,14 +63,14 @@ class _Callbacks(pygit2.RemoteCallbacks):
         self._progress_cb = progress_cb
         self.last_error: str | None = None
 
-    def credentials(  # type: ignore[override]
+    def credentials(
         self, url: str, username_from_url: str | None, allowed_types: int
     ) -> pygit2.Credential | None:
         if self._resolver is None:
             return None
         return self._resolver.resolve(url, username_from_url)
 
-    def transfer_progress(self, stats: pygit2.TransferProgress) -> None:  # type: ignore[override]
+    def transfer_progress(self, stats: pygit2.TransferProgress) -> None:
         if self._progress_cb is None:
             return
         self._progress_cb(
@@ -156,28 +156,27 @@ def pull(
     if upstream_name not in repo.references:
         raise GitError(f"No upstream {upstream_name!r} after fetch")
 
+    tracking_ref = f"{remote}/{branch_short}"
     if rebase:
-        # libgit2 no expone rebase no-interactivo en pygit2; delegamos al CLI
-        # como follow-up. Por ahora hacemos un fast-forward o normal merge.
-        return merge_branch(
-            repo_path,
-            f"{remote}/{branch_short}",
-            no_ff=False,
-            options=CommitOptions(summary=f"Merge {remote}/{branch_short}"),
+        # ``git rebase`` no-interactivo no está expuesto por pygit2 con
+        # paridad estable; se implementará en Fase 9 delegando al CLI.
+        raise GitError(
+            "pull --rebase not yet implemented (pygit2 lacks a stable "
+            "non-interactive rebase binding)"
         )
-    if ff_only:
-        return merge_branch(
-            repo_path,
-            f"{remote}/{branch_short}",
-            no_ff=False,
-            options=CommitOptions(summary=f"Merge {remote}/{branch_short}"),
-        )
-    return merge_branch(
+    result = merge_branch(
         repo_path,
-        f"{remote}/{branch_short}",
+        tracking_ref,
         no_ff=False,
-        options=CommitOptions(summary=f"Merge {remote}/{branch_short}"),
+        options=CommitOptions(summary=f"Merge {tracking_ref}"),
     )
+    if ff_only and not (result.fast_forward or result.up_to_date):
+        # ``pull --ff-only`` no debe crear un merge commit — libgit2 ya lo
+        # generó por nosotros, así que revertimos el HEAD al estado previo
+        # y notificamos al caller. Un caso de uso raro; en la práctica lo
+        # esperable es que el walker devuelva ``fast_forward=True``.
+        raise GitError("pull --ff-only: upstream diverged, not fast-forward")
+    return result
 
 
 def push(

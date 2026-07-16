@@ -86,12 +86,37 @@ module = [
   "pygit2.*",
   "pytestqt.*",
   "babel.*",
+  "PySide6.*",
+  "pygments.*",
+  "keyring.*",
+  "httpx",
+  "paramiko.*",
+  "structlog",
+  "structlog.*",
+  "platformdirs",
+  "winpty",
+  "pytest",
+  "pytest.*",
+  "_pytest.*",
 ]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_decorators = false
+
+# PySide6-stubs marks all its classes as ``Any``, so ``disallow_subclassing_any``
+# (enabled by --strict) flags every QWidget subclass. Turn that check off for
+# the modules that inherit from Qt types; the rest of --strict stays on.
+[[tool.mypy.overrides]]
+module = [
+  "pygit.ui.views.*",
+  "pygit.ui.viewmodels.*",
+  "pygit.ui.widgets.*",
+  "pygit.infra.auto_fetch",
+  "pygit.domain.git.remote",
+]
+disallow_subclassing_any = false
 
 [tool.pytest.ini_options]
 minversion = "8.0"

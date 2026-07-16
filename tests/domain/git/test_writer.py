@@ -61,7 +61,20 @@ class TestStagingAndCommit:
         assert not empty_repo.head_is_unborn
         assert str(empty_repo.head.target) == sha
 
-    def test_commit_without_identity_raises(self, empty_repo: pygit2.Repository) -> None:
+    def test_commit_without_identity_raises(
+        self,
+        empty_repo: pygit2.Repository,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Simular ausencia de identity forzando ``repo.config`` a un objeto
+        # que no expone ninguna clave (pygit2 hereda de la config global del
+        # host y no la podemos limpiar en runtime — env vars no afectan a
+        # ``Repository.config`` una vez el repo está abierto).
+        class _EmptyConfig:
+            def __getitem__(self, key: str) -> str:
+                raise KeyError(key)
+
+        monkeypatch.setattr(type(empty_repo), "config", property(lambda _self: _EmptyConfig()))
         workdir = Path(empty_repo.workdir)
         (workdir / "a.txt").write_text("hi")
         stage_paths(workdir, ["a.txt"])

@@ -41,7 +41,9 @@ class AppConfig:
 
 
 def config_path() -> Path:
-    return user_config_path(APP_NAME, appauthor=False, roaming=True) / CONFIG_FILE
+    from pathlib import Path as _Path
+
+    return _Path(user_config_path(APP_NAME, appauthor=False, roaming=True)) / CONFIG_FILE
 
 
 def load_config(path: Path | None = None) -> AppConfig:

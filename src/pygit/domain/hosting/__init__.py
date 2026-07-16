@@ -185,26 +185,46 @@ class GitHubProvider:
             resp.raise_for_status()
 
 
+def _as_str(value: object, default: str = "") -> str:
+    return value if isinstance(value, str) else default
+
+
+def _as_int(value: object, default: int = 0) -> int:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
+
+
 def _pr_from_github(item: dict[str, object]) -> PullRequest:
-    user = item.get("user") or {}
-    head = item.get("head") or {}
-    base = item.get("base") or {}
-    created_raw = item.get("created_at")
+    user_raw = item.get("user")
+    user = user_raw if isinstance(user_raw, dict) else {}
+    head_raw = item.get("head")
+    head = head_raw if isinstance(head_raw, dict) else {}
+    base_raw = item.get("base")
+    base = base_raw if isinstance(base_raw, dict) else {}
+
     when: datetime | None = None
+    created_raw = item.get("created_at")
     if isinstance(created_raw, str):
         try:
             when = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
         except ValueError:
             when = None
+
     return PullRequest(
-        number=int(item.get("number") or 0),
-        title=str(item.get("title") or ""),
-        body=str(item.get("body") or ""),
-        author=str(user.get("login") if isinstance(user, dict) else "") or "",
-        state=str(item.get("state") or "open"),
-        source_branch=str(head.get("ref") if isinstance(head, dict) else ""),
-        target_branch=str(base.get("ref") if isinstance(base, dict) else ""),
-        url=str(item.get("html_url") or ""),
+        number=_as_int(item.get("number")),
+        title=_as_str(item.get("title")),
+        body=_as_str(item.get("body")),
+        author=_as_str(user.get("login")),
+        state=_as_str(item.get("state"), default="open"),
+        source_branch=_as_str(head.get("ref")),
+        target_branch=_as_str(base.get("ref")),
+        url=_as_str(item.get("html_url")),
         created_at=when,
         is_draft=bool(item.get("draft", False)),
     )

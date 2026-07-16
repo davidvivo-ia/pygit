@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import pygit2
+from pygit2.enums import ReferenceType
 
 from pygit.domain.git.errors import NotAGitRepositoryError, RepositoryNotFoundError
 
@@ -62,9 +63,9 @@ def snapshot(repo_path: Path, label: str) -> Snapshot:
     head_symbolic: str | None = None
     try:
         head = repo.lookup_reference("HEAD")
-        if head.type == pygit2.GIT_REF_SYMBOLIC:
+        if head.type == ReferenceType.SYMBOLIC:
             head_is_symbolic = True
-            head_symbolic = head.target  # type: ignore[assignment]
+            head_symbolic = head.target
             try:
                 head_target = str(repo.lookup_reference(head.target).target)
             except KeyError:

@@ -98,9 +98,8 @@ class CommitsModel(QAbstractTableModel):
             return commit.author.name
         if column is Column.DATE:
             return commit.author.when.strftime("%Y-%m-%d %H:%M")
-        if column is Column.SHA:
-            return commit.short_sha
-        return None
+        # Column.SHA (última rama exhaustiva).
+        return commit.short_sha
 
     def headerData(  # noqa: N802 — Qt API
         self,

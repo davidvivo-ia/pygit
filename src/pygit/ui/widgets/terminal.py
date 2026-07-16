@@ -22,11 +22,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 try:
-    import winpty  # type: ignore[import-not-found]
+    import winpty
 
     _HAVE_WINPTY = True
 except ImportError:  # pragma: no cover — pywinpty is Windows-only optional dep
-    winpty = None  # type: ignore[assignment]
+    winpty = None
     _HAVE_WINPTY = False
 
 
@@ -55,7 +55,7 @@ class Terminal(QPlainTextEdit):
         if not _HAVE_WINPTY:
             return
         env = dict(os.environ)
-        pty = winpty.PtyProcess.spawn(  # type: ignore[union-attr]
+        pty = winpty.PtyProcess.spawn(
             [self._shell],
             cwd=str(cwd) if cwd else None,
             env=env,

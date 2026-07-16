@@ -80,7 +80,7 @@ def list_status(repo_path: Path) -> list[StatusEntry]:
                 is_modified=bool(flags & getattr(pygit2, "GIT_STATUS_WT_MODIFIED", 1 << 8)),
                 is_new=bool(flags & getattr(pygit2, "GIT_STATUS_WT_NEW", 1 << 7)),
                 is_deleted=bool(flags & getattr(pygit2, "GIT_STATUS_WT_DELETED", 1 << 9)),
-                is_renamed=bool(flags & getattr(pygit2, "GIT_STATUS_WT_RENAMED", 1 << 10)),
+                is_renamed=bool(flags & getattr(pygit2, "GIT_STATUS_WT_RENAMED", 1 << 11)),
                 is_conflict=bool(flags & getattr(pygit2, "GIT_STATUS_CONFLICTED", 1 << 15)),
             )
         )
@@ -193,7 +193,13 @@ def _build_message(options: CommitOptions, repo: pygit2.Repository) -> str:
 
 
 def commit(repo_path: Path, options: CommitOptions) -> str:
-    """Crea un commit a partir del index actual. Devuelve la sha resultante."""
+    """Crea un commit a partir del index actual. Devuelve la sha resultante.
+
+    En modo ``amend`` se usa :meth:`pygit2.Repository.amend_commit` sobre el
+    HEAD actual (pasar ``"HEAD"`` como ``ref`` en ``create_commit`` falla en
+    libgit2 porque el nuevo commit no tiene HEAD como padre; ``amend_commit``
+    reemplaza la ref por nosotros).
+    """
     repo = _open(repo_path)
     index = repo.index
     tree_oid = index.write_tree()
@@ -204,17 +210,21 @@ def commit(repo_path: Path, options: CommitOptions) -> str:
         if repo.head_is_unborn:
             raise GitError("Cannot amend without an existing HEAD commit")
         head_commit = repo[repo.head.target]
-        parents = [p.id for p in head_commit.parents]
-        target = "HEAD"
-    else:
-        if repo.head_is_unborn:
-            parents = []
-            target = "HEAD"
-        else:
-            parents = [repo.head.target]
-            target = "HEAD"
+        oid = repo.amend_commit(
+            head_commit,
+            "HEAD",
+            author=sig,
+            committer=sig,
+            message=message,
+            tree=tree_oid,
+        )
+        return str(oid)
 
-    oid = repo.create_commit(target, sig, sig, message, tree_oid, parents)
+    if repo.head_is_unborn:
+        parents: list[pygit2.Oid] = []
+    else:
+        parents = [repo.head.target]
+    oid = repo.create_commit("HEAD", sig, sig, message, tree_oid, parents)
     return str(oid)
 
 
@@ -268,7 +278,7 @@ def set_upstream(repo_path: Path, branch_name: str, upstream: str | None) -> Non
     branch = repo.branches.local.get(branch_name)
     if branch is None:
         raise GitError(f"Branch {branch_name!r} does not exist")
-    branch.upstream_name = upstream  # type: ignore[assignment]
+    branch.upstream_name = upstream
 
 
 # --- Merge ---------------------------------------------------------------------
@@ -344,14 +354,25 @@ class StashEntry:
 def stash_save(
     repo_path: Path, message: str = "", *, include_untracked: bool = False
 ) -> str | None:
+    """Guarda el WIP como un stash. Devuelve ``None`` si no hay nada.
+
+    Libgit2 en versiones recientes acepta ``git_stash_save`` sobre workdirs
+    limpios y crea un stash vacío; nosotros lo evitamos filtrando por
+    ``status()`` antes — paridad con el comportamiento de ``git stash``
+    ("No local changes to save").
+    """
     repo = _open(repo_path)
+    ignored_flag = getattr(pygit2, "GIT_STATUS_IGNORED", 1 << 14)
+    has_changes = any(flags & ~ignored_flag for _, flags in repo.status().items())
+    if not has_changes:
+        return None
     sig = _resolve_signature(repo, CommitOptions(summary="stash"))
     flags = 0
     if include_untracked:
         flags |= getattr(pygit2, "GIT_STASH_INCLUDE_UNTRACKED", 1 << 1)
     try:
         oid = repo.stash(sig, message, flags)
-    except KeyError:
+    except (KeyError, pygit2.GitError):
         return None
     return str(oid)
 

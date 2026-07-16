@@ -34,14 +34,21 @@ def linear_repo(tmp_path: Path, signature: pygit2.Signature) -> tuple[pygit2.Rep
     que puede variar entre ``master`` y ``main``).
     """
     repo = pygit2.init_repository(str(tmp_path / "linear"), bare=False)
-    repo.references.create_symbolic("HEAD", "refs/heads/main", force=True)
+    repo.set_head("refs/heads/main")
 
     shas: list[str] = []
     parents: list[pygit2.Oid] = []
+    prev_tree_entries: dict[str, pygit2.Oid] = {}
     for i in range(3):
+        # Cada commit añade file_{i}.txt manteniendo los ficheros previos,
+        # de modo que checkout del HEAD final deja un workdir limpio y
+        # coherente (los tests de stash lo requieren).
         tree_builder = repo.TreeBuilder()
+        for name, oid in prev_tree_entries.items():
+            tree_builder.insert(name, oid, pygit2.enums.FileMode.BLOB)
         blob = repo.create_blob(f"hello {i}\n".encode())
-        tree_builder.insert(f"file_{i}.txt", blob, pygit2.GIT_FILEMODE_BLOB)
+        tree_builder.insert(f"file_{i}.txt", blob, pygit2.enums.FileMode.BLOB)
+        prev_tree_entries[f"file_{i}.txt"] = blob
         tree_oid = tree_builder.write()
         commit_oid = repo.create_commit(
             "HEAD",
@@ -54,4 +61,7 @@ def linear_repo(tmp_path: Path, signature: pygit2.Signature) -> tuple[pygit2.Rep
         shas.append(str(commit_oid))
         parents = [commit_oid]
 
+    # Materializar el workdir para que las operaciones que leen archivos
+    # (blame, discard, stash) se comporten como en un repo real.
+    repo.checkout("HEAD")
     return repo, shas

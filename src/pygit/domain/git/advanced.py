@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -101,7 +102,13 @@ async def run_interactive_rebase(
     """
     todo = render_todo(steps)
     env = os.environ.copy()
-    env["GIT_SEQUENCE_EDITOR"] = f'"{sys.executable}" "{sequence_editor_script}"'
+    # Git ejecuta ``GIT_SEQUENCE_EDITOR`` a través del shell del sistema
+    # (``sh -c`` en POSIX, cmd.exe en Windows). Escapamos ambos argumentos
+    # para que rutas con espacios o caracteres especiales no rompan el
+    # comando ni permitan inyección desde ``sys.executable`` o el script.
+    env["GIT_SEQUENCE_EDITOR"] = (
+        f"{shlex.quote(sys.executable)} {shlex.quote(str(sequence_editor_script))}"
+    )
     env["PYGIT_REBASE_TODO"] = todo
     proc = await asyncio.create_subprocess_exec(
         cli.executable,

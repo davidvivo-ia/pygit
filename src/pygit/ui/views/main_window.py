@@ -298,11 +298,12 @@ class MainWindow(QMainWindow):
         name, target, checkout = dlg.values()
         if not name:
             return
+        vm = self._vm
 
         async def run() -> None:
-            await self._vm.create_branch(name, target)
+            await vm.create_branch(name, target)
             if checkout:
-                await self._vm.checkout_branch(name)
+                await vm.checkout_branch(name)
 
         self._spawn(run())
 
@@ -359,11 +360,15 @@ class MainWindow(QMainWindow):
     def _on_rebase(self) -> None:
         if self._vm is None:
             return
+        repo_path = self._vm.path
+        if repo_path is None:
+            return
+        vm = self._vm
 
         async def run() -> None:
             history = await self._services.workers.submit(
                 self._services.git_engine.walk_history,
-                self._vm.path,
+                repo_path,
                 limit=50,
             )
             steps = [
@@ -377,7 +382,6 @@ class MainWindow(QMainWindow):
             dlg = RebaseEditorDialog(self, steps)
 
             def on_accept(new_steps: list[RebaseStep]) -> None:
-                # We pass HEAD~N as upstream where N = len(steps).
                 upstream = f"HEAD~{len(new_steps)}"
                 from pygit.domain.git.advanced import run_interactive_rebase
 
@@ -390,7 +394,7 @@ class MainWindow(QMainWindow):
                         )
                         await run_interactive_rebase(
                             self._services.git_cli,
-                            self._vm.path,  # type: ignore[arg-type]
+                            repo_path,
                             upstream,
                             new_steps,
                             sequence_editor_script=Path(str(script_path)),
@@ -398,7 +402,7 @@ class MainWindow(QMainWindow):
                     except Exception as exc:
                         self._on_repo_error(str(exc))
                         return
-                    await self._vm.refresh()
+                    await vm.refresh()
 
                 self._spawn(_run())
 
@@ -410,9 +414,10 @@ class MainWindow(QMainWindow):
     def _on_reflog(self) -> None:
         if self._vm is None:
             return
+        vm = self._vm
 
         async def run() -> None:
-            entries = await self._vm.reflog(limit=200)
+            entries = await vm.reflog(limit=200)
             from PySide6.QtWidgets import QDialog, QPlainTextEdit, QVBoxLayout
 
             dlg = QDialog(self)
@@ -431,17 +436,20 @@ class MainWindow(QMainWindow):
     # --- Slots: blame ---------------------------------------------------------
 
     def _on_blame_file(self) -> None:
-        if self._vm is None or self._vm.path is None:
+        if self._vm is None:
+            return
+        repo_path = self._vm.path
+        if repo_path is None:
             return
         path_str, _filter = QFileDialog.getOpenFileName(
             self,
             _("Blame File"),
-            str(self._vm.path),
+            str(repo_path),
         )
         if not path_str:
             return
         try:
-            relative = Path(path_str).relative_to(self._vm.path)
+            relative = Path(path_str).relative_to(repo_path)
         except ValueError:
             self._on_repo_error(_("File must be inside the repository"))
             return
@@ -454,7 +462,7 @@ class MainWindow(QMainWindow):
 
             try:
                 lines = await self._services.workers.submit(
-                    BlameEngine().blame, self._vm.path, str(relative)
+                    BlameEngine().blame, repo_path, str(relative)
                 )
             except Exception as exc:
                 self._on_repo_error(str(exc))
@@ -475,11 +483,9 @@ class MainWindow(QMainWindow):
     def _on_list_prs(self) -> None:
         if self._vm is None:
             return
+        vm = self._vm
 
-        async def run() -> None:
-            await self._vm.list_pull_requests()
-
-        self._spawn(run())
+        self._spawn(vm.list_pull_requests())
 
         # Mostrar lista en un diálogo simple con PrPanel.
         from PySide6.QtWidgets import QDialog, QVBoxLayout
@@ -496,14 +502,14 @@ class MainWindow(QMainWindow):
         def on_prs(items: list[object]) -> None:
             panel.set_items(items)  # type: ignore[arg-type]
 
-        self._vm.pull_requests_changed.connect(on_prs)
-        panel.refresh_requested.connect(lambda: self._spawn(self._vm.list_pull_requests()))
-        panel.merge_requested.connect(lambda n: self._spawn(self._vm.merge_pull_request(n)))
+        vm.pull_requests_changed.connect(on_prs)
+        panel.refresh_requested.connect(lambda: self._spawn(vm.list_pull_requests()))
+        panel.merge_requested.connect(lambda n: self._spawn(vm.merge_pull_request(n)))
         import contextlib
 
         dlg.exec()
         with contextlib.suppress(RuntimeError, TypeError):
-            self._vm.pull_requests_changed.disconnect(on_prs)
+            vm.pull_requests_changed.disconnect(on_prs)
 
     def _on_create_pr(self) -> None:
         if self._vm is None:
